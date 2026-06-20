@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Email Archive Search v1.2</title>
+<title>Email Archive Search v1.4</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -102,13 +102,13 @@
   }
   textarea#q {
     padding-left: 2.2rem;
-    min-height: 90px;
-    max-height: 320px;
+    min-height: 140px;
+    max-height: 400px;
     resize: vertical;
     line-height: 1.6;
   }
 
-  .filters { display: grid; grid-template-columns: 1fr 1fr 1fr 1.2fr; gap: .75rem; }
+  .filters { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
   .filter-group label { display: block; font-size: .74rem; font-weight: 500; color: var(--ink-soft); margin-bottom: 4px; }
 
   .error-box { background: #fef2f2; border: 1px solid #fecaca; border-radius: var(--radius); padding: .85rem 1.1rem; color: var(--danger); font-size: .85rem; margin-bottom: 1rem; display: none; }
@@ -162,7 +162,7 @@
 
   @media (max-width: 640px) {
     main { padding: 1.25rem 1rem 3rem; }
-    .filters { grid-template-columns: 1fr 1fr; }
+    .filters { grid-template-columns: 1fr; }
     .hit-right { display: none; }
     /* Stack search button below textarea on mobile */
     .search-row { flex-direction: column; }
@@ -189,7 +189,7 @@
       <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
     </svg>
     Email Archive Search
-    <span class="logo-version">v1.2</span>
+    <span class="logo-version">v1.4</span>
   </div>
   <div class="header-right">
     <span id="api-status"><span class="dot"></span>API...</span>
@@ -275,7 +275,7 @@ Shift+Enter = new line  |  Enter = search"
 </main>
 
 <script>
-  const VERSION = '1.2';
+  const VERSION = '1.4';
   const API     = `${location.protocol}//${location.hostname}:8001`;
   // Update OA_BASE port and path to match your OpenArchiver installation
   const OA_BASE = `http://${location.hostname}:3000/dashboard/archived-emails`;
