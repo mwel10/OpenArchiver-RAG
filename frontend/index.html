@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Email Archive Search v1.2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink:        #0f1117;
+    --ink-soft:   #4a4f5e;
+    --ink-muted:  #8b909f;
+    --surface:    #f7f8fa;
+    --white:      #ffffff;
+    --border:     #e2e4ea;
+    --border-mid: #c8ccd8;
+    --accent:     #1a56db;
+    --accent-dim: #e8eefb;
+    --accent-hover:#1245c0;
+    --sem-bg:     #e6f5f1;
+    --sem:        #0e7a5f;
+    --kw-bg:      #f3eeff;
+    --kw:         #7c3aed;
+    --success:    #16a34a;
+    --danger:     #dc2626;
+    --warn:       #f59e0b;
+    --radius:     6px;
+    --radius-lg:  10px;
+    --shadow:     0 1px 3px rgba(15,17,23,.07), 0 4px 16px rgba(15,17,23,.04);
+    --font:       'Inter', system-ui, sans-serif;
+    --mono:       'JetBrains Mono', monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { font-size: 15px; -webkit-font-smoothing: antialiased; }
+  body { font-family: var(--font); background: var(--surface); color: var(--ink); min-height: 100vh; }
+
+  header {
+    background: var(--white);
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .logo { font-weight: 600; font-size: .95rem; display: flex; align-items: center; gap: 9px; color: var(--ink); }
+  .logo svg { color: var(--accent); }
+  .logo-version { font-size: .7rem; font-weight: 400; color: var(--ink-muted); background: var(--surface); border: 1px solid var(--border); border-radius: 99px; padding: 1px 8px; margin-left: 2px; }
+  .header-right { margin-left: auto; display: flex; align-items: center; gap: 1.5rem; font-size: .8rem; color: var(--ink-muted); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--border-mid); display: inline-block; margin-right: 4px; vertical-align: middle; }
+  .dot.ok   { background: var(--success); }
+  .dot.warn { background: var(--warn); }
+
+  main { max-width: 880px; margin: 0 auto; padding: 2.5rem 1.5rem 5rem; }
+
+  .card {
+    background: var(--white); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 1.5rem 1.75rem;
+    box-shadow: var(--shadow); margin-bottom: 1.5rem;
+  }
+  .card-title { font-size: 1rem; font-weight: 600; margin-bottom: 1.1rem; }
+
+  .index-row { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+  .progress-wrap { flex: 1; min-width: 160px; }
+  .progress-bar { height: 6px; background: var(--border); border-radius: 99px; overflow: hidden; margin-bottom: 4px; }
+  .progress-fill { height: 100%; background: var(--accent); border-radius: 99px; transition: width .5s ease; }
+  .progress-label { font-size: .78rem; color: var(--ink-muted); }
+
+  .btn {
+    border: none; border-radius: var(--radius); font-family: var(--font);
+    font-size: .85rem; font-weight: 500; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: .5rem 1.1rem; transition: background .14s, opacity .14s; white-space: nowrap;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-ghost { background: var(--surface); color: var(--ink-soft); border: 1px solid var(--border-mid); }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+  .btn:disabled { opacity: .5; pointer-events: none; }
+  .running-msg { font-size: .8rem; color: var(--ink-muted); display: flex; align-items: center; gap: 6px; }
+
+  .mode-tabs { display: flex; gap: .3rem; background: var(--surface); padding: 3px; border-radius: var(--radius); width: fit-content; margin-bottom: 1.1rem; }
+  .mode-tab { padding: .3rem .8rem; border: none; border-radius: calc(var(--radius) - 1px); font-size: .8rem; font-weight: 500; background: transparent; color: var(--ink-soft); cursor: pointer; transition: all .12s; }
+  .mode-tab.active { background: var(--white); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+
+  .search-row { display: flex; gap: .75rem; margin-bottom: 1rem; align-items: flex-start; }
+  .input-wrap { flex: 1; position: relative; }
+  .input-wrap svg { position: absolute; left: 12px; top: 13px; color: var(--ink-muted); pointer-events: none; }
+
+  input[type=text], input[type=date], select, textarea {
+    width: 100%; border: 1px solid var(--border-mid); border-radius: var(--radius);
+    padding: .55rem .75rem; font-size: .88rem; font-family: var(--font);
+    background: var(--white); color: var(--ink); outline: none;
+    transition: border-color .12s, box-shadow .12s;
+  }
+  input[type=text]:focus, input[type=date]:focus, select:focus, textarea:focus {
+    border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim);
+  }
+  textarea#q {
+    padding-left: 2.2rem;
+    min-height: 90px;
+    max-height: 320px;
+    resize: vertical;
+    line-height: 1.6;
+  }
+
+  .filters { display: grid; grid-template-columns: 1fr 1fr 1fr 1.2fr; gap: .75rem; }
+  .filter-group label { display: block; font-size: .74rem; font-weight: 500; color: var(--ink-soft); margin-bottom: 4px; }
+
+  .error-box { background: #fef2f2; border: 1px solid #fecaca; border-radius: var(--radius); padding: .85rem 1.1rem; color: var(--danger); font-size: .85rem; margin-bottom: 1rem; display: none; }
+
+  .results-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+  .results-count { font-size: .85rem; color: var(--ink-soft); }
+  .results-count strong { color: var(--ink); }
+  .tags { display: flex; gap: .4rem; }
+  .tag { font-size: .7rem; font-weight: 600; padding: 2px 8px; border-radius: 99px; }
+  .tag.semantic { background: var(--sem-bg); color: var(--sem); }
+  .tag.keyword  { background: var(--kw-bg);  color: var(--kw); }
+  .tag.hybrid   { background: #fffbe6; color: #92400e; }
+
+  .ai-answer { background: var(--accent-dim); border: 1px solid #c3d5f7; border-radius: var(--radius-lg); padding: 1.1rem 1.4rem; margin-bottom: 1.25rem; }
+  .ai-label { font-size: .72rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--accent); margin-bottom: .5rem; display: flex; align-items: center; gap: 5px; }
+  .ai-text { font-size: .88rem; line-height: 1.65; white-space: pre-wrap; }
+
+  .hits-list { display: flex; flex-direction: column; gap: .7rem; }
+  a.hit {
+    background: var(--white); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 1rem 1.3rem;
+    box-shadow: var(--shadow); cursor: pointer;
+    transition: border-color .12s, box-shadow .12s;
+    text-decoration: none; display: block; color: inherit;
+  }
+  a.hit:hover { border-color: var(--accent); box-shadow: 0 2px 12px rgba(26,86,219,.1); }
+  .hit-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: .4rem; }
+  .hit-subject { font-size: .93rem; font-weight: 600; line-height: 1.3; }
+  .hit-right { display: flex; align-items: center; gap: .6rem; flex-shrink: 0; }
+  .hit-date { font-size: .77rem; color: var(--ink-muted); white-space: nowrap; }
+  .source-badge { font-size: .68rem; font-weight: 600; padding: 2px 7px; border-radius: 99px; }
+  .source-badge.semantic { background: var(--sem-bg); color: var(--sem); }
+  .source-badge.keyword  { background: var(--kw-bg);  color: var(--kw); }
+  .hit-sender { font-size: .8rem; color: var(--ink-soft); margin-bottom: .4rem; }
+  .hit-preview { font-size: .83rem; color: var(--ink-soft); line-height: 1.55; }
+  .hit-score { font-size: .7rem; font-family: var(--mono); color: var(--border-mid); margin-top: .4rem; }
+  .hit-open { font-size: .75rem; color: var(--accent); margin-top: .5rem; display: flex; align-items: center; gap: 4px; }
+
+  .empty { text-align: center; padding: 4rem 2rem; color: var(--ink-muted); }
+  .empty svg { opacity: .3; margin-bottom: 1rem; }
+  .empty h3 { font-size: .95rem; font-weight: 500; color: var(--ink-soft); margin-bottom: .35rem; }
+  .empty p  { font-size: .83rem; }
+
+  .spinner { width: 15px; height: 15px; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: spin .6s linear infinite; display: inline-block; }
+  .spinner.dark { border-color: rgba(0,0,0,.1); border-top-color: var(--accent); }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .skel { background: linear-gradient(90deg,var(--border) 25%,var(--surface) 50%,var(--border) 75%); background-size: 200% 100%; animation: shimmer 1.1s infinite; border-radius: 4px; }
+  @keyframes shimmer { to { background-position: -200% 0; } }
+  .skel-card { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1rem 1.3rem; margin-bottom: .7rem; }
+
+  @media (max-width: 640px) {
+    main { padding: 1.25rem 1rem 3rem; }
+    .filters { grid-template-columns: 1fr 1fr; }
+    .hit-right { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2" y="4" width="20" height="16" rx="2"/>
+      <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+    </svg>
+    Email Archive Search
+    <span class="logo-version">v1.2</span>
+  </div>
+  <div class="header-right">
+    <span id="api-status"><span class="dot"></span>API...</span>
+    <span id="idx-status"><span class="dot"></span>Index...</span>
+  </div>
+</header>
+
+<main>
+
+  <div class="card">
+    <div class="card-title">Semantic index (Qdrant)</div>
+    <div class="index-row">
+      <div class="progress-wrap">
+        <div class="progress-bar"><div class="progress-fill" id="pfill" style="width:0%"></div></div>
+        <div class="progress-label" id="plabel">Loading...</div>
+      </div>
+      <button class="btn btn-primary" id="btn-index" onclick="startIndex()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.06-4.57"/></svg>
+        Index new emails
+      </button>
+      <button class="btn btn-ghost" onclick="loadStatus()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        Refresh
+      </button>
+      <span id="running-msg" class="running-msg" style="display:none">
+        <span class="spinner dark"></span> Indexing...
+      </span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Search</div>
+
+    <div class="mode-tabs">
+      <button class="mode-tab active" data-mode="hybrid"   onclick="setMode(this)">Hybrid</button>
+      <button class="mode-tab"        data-mode="semantic" onclick="setMode(this)">Semantic</button>
+      <button class="mode-tab"        data-mode="keyword"  onclick="setMode(this)">Keyword</button>
+    </div>
+
+    <div class="search-row">
+      <div class="input-wrap">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <textarea id="q" rows="3"
+          placeholder="e.g. 'We have a dispute with the contractor about who is responsible for the bathroom renovation. Analyse the correspondence and indicate who is responsible and why.'
+
+Shift+Enter = new line  |  Enter = search"
+          onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();doSearch();}"></textarea>
+      </div>
+      <button class="btn btn-primary" id="btn-search" onclick="doSearch()" style="margin-top:1px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        Search
+      </button>
+    </div>
+
+    <div class="filters">
+      <div class="filter-group">
+        <label>Sender</label>
+        <input type="text" id="f-sender" placeholder="name@domain.com">
+      </div>
+      <div class="filter-group">
+        <label>From date</label>
+        <input type="date" id="f-from">
+      </div>
+      <div class="filter-group">
+        <label>To date</label>
+        <input type="date" id="f-to">
+      </div>
+      <div class="filter-group">
+        <label>Results</label>
+        <select id="f-limit">
+          <option value="10">10</option>
+          <option value="15" selected>15</option>
+          <option value="25">25</option>
+          <option value="50">50</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="error-box" id="err"></div>
+  <div id="results"></div>
+
+</main>
+
+<script>
+  const VERSION = '1.2';
+  const API     = `${location.protocol}//${location.hostname}:8001`;
+  // Update OA_BASE port and path to match your OpenArchiver installation
+  const OA_BASE = `http://${location.hostname}:3000/dashboard/archived-emails`;
+
+  let mode = 'hybrid';
+  let pollTimer = null;
+
+  function setMode(btn) {
+    document.querySelectorAll('.mode-tab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    mode = btn.dataset.mode;
+  }
+
+  function fmt(str) {
+    if (!str) return '';
+    try { return new Date(str).toLocaleDateString('en-GB', {day:'2-digit', month:'short', year:'numeric'}); }
+    catch { return str; }
+  }
+
+  function esc(s) {
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function showErr(msg) {
+    const el = document.getElementById('err');
+    el.textContent = msg;
+    el.style.display = 'block';
+    setTimeout(() => el.style.display = 'none', 8000);
+  }
+
+  function skelCards(n) {
+    return Array.from({length:n}, () => `
+      <div class="skel-card">
+        <div class="skel" style="width:55%;height:13px;margin-bottom:9px"></div>
+        <div class="skel" style="width:30%;height:10px;margin-bottom:8px"></div>
+        <div class="skel" style="width:100%;height:9px;margin-bottom:5px"></div>
+        <div class="skel" style="width:75%;height:9px"></div>
+      </div>`).join('');
+  }
+
+  async function loadStatus() {
+    try {
+      const d = await fetch(`${API}/index/status`).then(r => r.json());
+      const pct = d.coverage_pct || 0;
+      document.getElementById('pfill').style.width = pct + '%';
+      document.getElementById('plabel').textContent =
+        `${(d.qdrant_indexed||0).toLocaleString()} of ${(d.postgres_total||0).toLocaleString()} emails indexed (${pct}%)`;
+      document.getElementById('idx-status').innerHTML =
+        `<span class="dot ${pct>=99?'ok':'warn'}"></span>${(d.qdrant_indexed||0).toLocaleString()} vectors`;
+      const running = d.state?.running;
+      document.getElementById('running-msg').style.display = running ? 'flex' : 'none';
+      document.getElementById('btn-index').disabled = !!running;
+      if (running && !pollTimer) pollTimer = setInterval(loadStatus, 3000);
+      if (!running && pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    } catch {
+      document.getElementById('idx-status').innerHTML = '<span class="dot"></span>Offline';
+    }
+  }
+
+  async function checkApi() {
+    try {
+      await fetch(`${API}/health`);
+      document.getElementById('api-status').innerHTML = '<span class="dot ok"></span>API online';
+    } catch {
+      document.getElementById('api-status').innerHTML = '<span class="dot"></span>API offline';
+    }
+  }
+
+  async function startIndex() {
+    document.getElementById('btn-index').disabled = true;
+    document.getElementById('running-msg').style.display = 'flex';
+    try {
+      await fetch(`${API}/index`, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({limit: 500, offset: 0})
+      });
+      pollTimer = setInterval(loadStatus, 3000);
+    } catch(e) {
+      showErr('Failed to start: ' + e.message);
+      document.getElementById('btn-index').disabled = false;
+      document.getElementById('running-msg').style.display = 'none';
+    }
+  }
+
+  async function doSearch() {
+    const q = document.getElementById('q').value.trim();
+    if (!q) { document.getElementById('q').focus(); return; }
+    const btn = document.getElementById('btn-search');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Searching...';
+    document.getElementById('err').style.display = 'none';
+    document.getElementById('results').innerHTML = skelCards(4);
+    try {
+      const resp = await fetch(`${API}/search`, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({
+          question:    q,
+          mode:        mode,
+          max_results: parseInt(document.getElementById('f-limit').value),
+          sender:      document.getElementById('f-sender').value.trim() || null,
+          date_from:   document.getElementById('f-from').value || null,
+          date_to:     document.getElementById('f-to').value   || null,
+        })
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      render(await resp.json());
+    } catch(e) {
+      showErr('Search error: ' + e.message);
+      document.getElementById('results').innerHTML = '';
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Search`;
+    }
+  }
+
+  function render(data) {
+    const el = document.getElementById('results');
+    if (!data.hits?.length) {
+      el.innerHTML = `<div class="empty">
+        <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <h3>No results found</h3><p>Try different search terms or a different search mode.</p></div>`;
+      return;
+    }
+
+    const modeTag = mode === 'semantic'
+      ? `<span class="tag semantic">Semantic</span>`
+      : mode === 'keyword'
+        ? `<span class="tag keyword">Keyword</span>`
+        : `<span class="tag hybrid">Hybrid</span>`;
+
+    const header = `<div class="results-header">
+      <span class="results-count"><strong>${data.total}</strong> results found</span>
+      <div class="tags">
+        ${modeTag}
+        ${data.keyword_count  ? `<span class="tag keyword">${data.keyword_count} keyword</span>`  : ''}
+        ${data.semantic_count ? `<span class="tag semantic">${data.semantic_count} semantic</span>` : ''}
+      </div>
+    </div>`;
+
+    const answer = data.answer ? `<div class="ai-answer">
+      <div class="ai-label">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        Claude AI — analysis
+      </div>
+      <div class="ai-text">${esc(data.answer)}</div>
+    </div>` : '';
+
+    const hits = data.hits.map(h => {
+      const url = `${OA_BASE}/${h.id}`;
+      return `<a class="hit" href="${url}" target="_blank" rel="noopener noreferrer">
+        <div class="hit-top">
+          <div class="hit-subject">${esc(h.subject || '(no subject)')}</div>
+          <div class="hit-right">
+            <span class="hit-date">${fmt(h.date)}</span>
+            <span class="source-badge ${h.source}">${h.source === 'semantic' ? 'Semantic' : 'Keyword'}</span>
+          </div>
+        </div>
+        <div class="hit-sender">${esc(h.sender || 'Unknown')}</div>
+        <div class="hit-preview">${esc(h.preview || '')}</div>
+        <div class="hit-score">score ${(h.score*100).toFixed(1)}%</div>
+        <div class="hit-open">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          Open in OpenArchiver
+        </div>
+      </a>`;
+    }).join('');
+
+    el.innerHTML = header + answer + `<div class="hits-list">${hits}</div>`;
+  }
+
+  checkApi();
+  loadStatus();
+</script>
+</body>
+</html>
