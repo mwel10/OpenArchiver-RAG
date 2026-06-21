@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Email Archive Search v1.4</title>
+<title>Email Archive Search v1.5</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -36,16 +36,9 @@
   body { font-family: var(--font); background: var(--surface); color: var(--ink); min-height: 100vh; }
 
   header {
-    background: var(--white);
-    border-bottom: 1px solid var(--border);
-    padding: 0 2rem;
-    height: 56px;
-    display: flex;
-    align-items: center;
-    gap: 1.5rem;
-    position: sticky;
-    top: 0;
-    z-index: 100;
+    background: var(--white); border-bottom: 1px solid var(--border);
+    padding: 0 2rem; height: 56px; display: flex; align-items: center;
+    gap: 1.5rem; position: sticky; top: 0; z-index: 100;
   }
   .logo { font-weight: 600; font-size: .95rem; display: flex; align-items: center; gap: 9px; color: var(--ink); }
   .logo svg { color: var(--accent); }
@@ -101,13 +94,9 @@
     border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim);
   }
   textarea#q {
-    padding-left: 2.2rem;
-    min-height: 140px;
-    max-height: 400px;
-    resize: vertical;
-    line-height: 1.6;
+    padding-left: 2.2rem; min-height: 140px; max-height: 400px;
+    resize: vertical; line-height: 1.6;
   }
-
   .filters { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
   .filter-group label { display: block; font-size: .74rem; font-weight: 500; color: var(--ink-soft); margin-bottom: 4px; }
 
@@ -162,19 +151,14 @@
 
   @media (max-width: 640px) {
     main { padding: 1.25rem 1rem 3rem; }
-    .filters { grid-template-columns: 1fr; }
-    .hit-right { display: none; }
-    /* Stack search button below textarea on mobile */
     .search-row { flex-direction: column; }
-    .search-row .btn-primary { width: 100%; justify-content: center; margin-top: 0 !important; }
-    /* Compact index panel on mobile */
+    .search-row .btn-primary { width: 100%; justify-content: center; }
     .index-row { flex-direction: column; align-items: stretch; }
     .index-row .btn { justify-content: center; }
-    /* Larger touch targets */
+    .filters { grid-template-columns: 1fr; }
     .mode-tab { padding: .45rem 1rem; font-size: .85rem; }
-    textarea#q { min-height: 100px; }
-    .hit { padding: .85rem 1rem; }
-    /* Header compact */
+    textarea#q { min-height: 120px; }
+    .hit-right { display: none; }
     .logo-version { display: none; }
     .header-right { gap: .75rem; font-size: .75rem; }
   }
@@ -189,7 +173,7 @@
       <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
     </svg>
     Email Archive Search
-    <span class="logo-version">v1.4</span>
+    <span class="logo-version">v1.5</span>
   </div>
   <div class="header-right">
     <span id="api-status"><span class="dot"></span>API...</span>
@@ -232,7 +216,7 @@
     <div class="search-row">
       <div class="input-wrap">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <textarea id="q" rows="3"
+        <textarea id="q" rows="4"
           placeholder="e.g. 'We have a dispute with the contractor about who is responsible for the bathroom renovation. Analyse the correspondence and indicate who is responsible and why.'
 
 Shift+Enter = new line  |  Enter = search"
@@ -275,181 +259,198 @@ Shift+Enter = new line  |  Enter = search"
 </main>
 
 <script>
-  const VERSION = '1.4';
-  const API     = `${location.protocol}//${location.hostname}:8001`;
-  // Update OA_BASE port and path to match your OpenArchiver installation
-  const OA_BASE = `http://${location.hostname}:3000/dashboard/archived-emails`;
+var VERSION = '1.5';
+var API = location.protocol + '//' + location.hostname + ':8001';
+// Update port and path to match your OpenArchiver installation
+var OA_BASE = 'http://' + location.hostname + ':3000/dashboard/archived-emails';
+var mode = 'hybrid';
+var pollTimer = null;
 
-  let mode = 'hybrid';
-  let pollTimer = null;
+function setMode(btn) {
+  document.querySelectorAll('.mode-tab').forEach(function(b) { b.classList.remove('active'); });
+  btn.classList.add('active');
+  mode = btn.dataset.mode;
+}
 
-  function setMode(btn) {
-    document.querySelectorAll('.mode-tab').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    mode = btn.dataset.mode;
+function fmt(str) {
+  if (!str) return '';
+  try { return new Date(str).toLocaleDateString('en-GB', {day:'2-digit', month:'short', year:'numeric'}); }
+  catch(e) { return str; }
+}
+
+function esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function showErr(msg) {
+  var el = document.getElementById('err');
+  el.textContent = msg;
+  el.style.display = 'block';
+  setTimeout(function() { el.style.display = 'none'; }, 8000);
+}
+
+function skelCards(n) {
+  var out = '';
+  for (var i = 0; i < n; i++) {
+    out += '<div class="skel-card">' +
+      '<div class="skel" style="width:55%;height:13px;margin-bottom:9px"></div>' +
+      '<div class="skel" style="width:30%;height:10px;margin-bottom:8px"></div>' +
+      '<div class="skel" style="width:100%;height:9px;margin-bottom:5px"></div>' +
+      '<div class="skel" style="width:75%;height:9px"></div>' +
+      '</div>';
   }
+  return out;
+}
 
-  function fmt(str) {
-    if (!str) return '';
-    try { return new Date(str).toLocaleDateString('en-GB', {day:'2-digit', month:'short', year:'numeric'}); }
-    catch { return str; }
-  }
-
-  function esc(s) {
-    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
-
-  function showErr(msg) {
-    const el = document.getElementById('err');
-    el.textContent = msg;
-    el.style.display = 'block';
-    setTimeout(() => el.style.display = 'none', 8000);
-  }
-
-  function skelCards(n) {
-    return Array.from({length:n}, () => `
-      <div class="skel-card">
-        <div class="skel" style="width:55%;height:13px;margin-bottom:9px"></div>
-        <div class="skel" style="width:30%;height:10px;margin-bottom:8px"></div>
-        <div class="skel" style="width:100%;height:9px;margin-bottom:5px"></div>
-        <div class="skel" style="width:75%;height:9px"></div>
-      </div>`).join('');
-  }
-
-  async function loadStatus() {
-    try {
-      const d = await fetch(`${API}/index/status`).then(r => r.json());
-      const pct = d.coverage_pct || 0;
+function loadStatus() {
+  fetch(API + '/index/status')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      var pct = d.coverage_pct || 0;
       document.getElementById('pfill').style.width = pct + '%';
       document.getElementById('plabel').textContent =
-        `${(d.qdrant_indexed||0).toLocaleString()} of ${(d.postgres_total||0).toLocaleString()} emails indexed (${pct}%)`;
+        (d.qdrant_indexed || 0).toLocaleString() + ' of ' +
+        (d.postgres_total || 0).toLocaleString() + ' emails indexed (' + pct + '%)';
       document.getElementById('idx-status').innerHTML =
-        `<span class="dot ${pct>=99?'ok':'warn'}"></span>${(d.qdrant_indexed||0).toLocaleString()} vectors`;
-      const running = d.state?.running;
+        '<span class="dot ' + (pct >= 99 ? 'ok' : 'warn') + '"></span>' +
+        (d.qdrant_indexed || 0).toLocaleString() + ' vectors';
+      var running = d.state && d.state.running;
       document.getElementById('running-msg').style.display = running ? 'flex' : 'none';
       document.getElementById('btn-index').disabled = !!running;
-      if (running && !pollTimer) pollTimer = setInterval(loadStatus, 3000);
+      if (running && !pollTimer) { pollTimer = setInterval(loadStatus, 3000); }
       if (!running && pollTimer) { clearInterval(pollTimer); pollTimer = null; }
-    } catch {
+    })
+    .catch(function() {
       document.getElementById('idx-status').innerHTML = '<span class="dot"></span>Offline';
-    }
-  }
+    });
+}
 
-  async function checkApi() {
-    try {
-      await fetch(`${API}/health`);
+function checkApi() {
+  fetch(API + '/health')
+    .then(function() {
       document.getElementById('api-status').innerHTML = '<span class="dot ok"></span>API online';
-    } catch {
+    })
+    .catch(function() {
       document.getElementById('api-status').innerHTML = '<span class="dot"></span>API offline';
-    }
+    });
+}
+
+function startIndex() {
+  document.getElementById('btn-index').disabled = true;
+  document.getElementById('running-msg').style.display = 'flex';
+  fetch(API + '/index', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({limit: 500, offset: 0})
+  })
+  .then(function() {
+    pollTimer = setInterval(loadStatus, 3000);
+  })
+  .catch(function(e) {
+    showErr('Failed to start: ' + e.message);
+    document.getElementById('btn-index').disabled = false;
+    document.getElementById('running-msg').style.display = 'none';
+  });
+}
+
+function doSearch() {
+  var q = document.getElementById('q').value.trim();
+  if (!q) { document.getElementById('q').focus(); return; }
+  var btn = document.getElementById('btn-search');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Searching...';
+  document.getElementById('err').style.display = 'none';
+  document.getElementById('results').innerHTML = skelCards(4);
+
+  fetch(API + '/search', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      question:    q,
+      mode:        mode,
+      max_results: parseInt(document.getElementById('f-limit').value),
+      sender:      document.getElementById('f-sender').value.trim() || null,
+      date_from:   document.getElementById('f-from').value || null,
+      date_to:     document.getElementById('f-to').value || null
+    })
+  })
+  .then(function(r) {
+    if (!r.ok) { throw new Error('HTTP ' + r.status); }
+    return r.json();
+  })
+  .then(function(data) { render(data); })
+  .catch(function(e) {
+    showErr('Search error: ' + e.message);
+    document.getElementById('results').innerHTML = '';
+  })
+  .finally(function() {
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Search';
+  });
+}
+
+function render(data) {
+  var el = document.getElementById('results');
+  if (!data.hits || !data.hits.length) {
+    el.innerHTML = '<div class="empty">' +
+      '<svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>' +
+      '<h3>No results found</h3><p>Try different search terms or a different search mode.</p></div>';
+    return;
   }
 
-  async function startIndex() {
-    document.getElementById('btn-index').disabled = true;
-    document.getElementById('running-msg').style.display = 'flex';
-    try {
-      await fetch(`${API}/index`, {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({limit: 500, offset: 0})
-      });
-      pollTimer = setInterval(loadStatus, 3000);
-    } catch(e) {
-      showErr('Failed to start: ' + e.message);
-      document.getElementById('btn-index').disabled = false;
-      document.getElementById('running-msg').style.display = 'none';
-    }
+  var modeTag = mode === 'semantic'
+    ? '<span class="tag semantic">Semantic</span>'
+    : mode === 'keyword'
+      ? '<span class="tag keyword">Keyword</span>'
+      : '<span class="tag hybrid">Hybrid</span>';
+
+  var kwTag = data.keyword_count ? '<span class="tag keyword">' + data.keyword_count + ' keyword</span>' : '';
+  var semTag = data.semantic_count ? '<span class="tag semantic">' + data.semantic_count + ' semantic</span>' : '';
+
+  var header = '<div class="results-header">' +
+    '<span class="results-count"><strong>' + data.total + '</strong> results found</span>' +
+    '<div class="tags">' + modeTag + kwTag + semTag + '</div>' +
+    '</div>';
+
+  var answer = '';
+  if (data.answer) {
+    answer = '<div class="ai-answer">' +
+      '<div class="ai-label">' +
+        '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>' +
+        'Claude AI — analysis' +
+      '</div>' +
+      '<div class="ai-text">' + esc(data.answer) + '</div>' +
+      '</div>';
   }
 
-  async function doSearch() {
-    const q = document.getElementById('q').value.trim();
-    if (!q) { document.getElementById('q').focus(); return; }
-    const btn = document.getElementById('btn-search');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span> Searching...';
-    document.getElementById('err').style.display = 'none';
-    document.getElementById('results').innerHTML = skelCards(4);
-    try {
-      const resp = await fetch(`${API}/search`, {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({
-          question:    q,
-          mode:        mode,
-          max_results: parseInt(document.getElementById('f-limit').value),
-          sender:      document.getElementById('f-sender').value.trim() || null,
-          date_from:   document.getElementById('f-from').value || null,
-          date_to:     document.getElementById('f-to').value   || null,
-        })
-      });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      render(await resp.json());
-    } catch(e) {
-      showErr('Search error: ' + e.message);
-      document.getElementById('results').innerHTML = '';
-    } finally {
-      btn.disabled = false;
-      btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Search`;
-    }
+  var hits = '';
+  for (var i = 0; i < data.hits.length; i++) {
+    var h = data.hits[i];
+    var url = OA_BASE + '/' + h.id;
+    var badge = h.source === 'semantic' ? 'Semantic' : 'Keyword';
+    hits += '<a class="hit" href="' + url + '" target="_blank" rel="noopener noreferrer">' +
+      '<div class="hit-top">' +
+        '<div class="hit-subject">' + esc(h.subject || '(no subject)') + '</div>' +
+        '<div class="hit-right">' +
+          '<span class="hit-date">' + fmt(h.date) + '</span>' +
+          '<span class="source-badge ' + h.source + '">' + badge + '</span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="hit-sender">' + esc(h.sender || 'Unknown') + '</div>' +
+      '<div class="hit-preview">' + esc(h.preview || '') + '</div>' +
+      '<div class="hit-score">score ' + (h.score * 100).toFixed(1) + '%</div>' +
+      '<div class="hit-open">' +
+        '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>' +
+        'Open in OpenArchiver' +
+      '</div>' +
+      '</a>';
   }
 
-  function render(data) {
-    const el = document.getElementById('results');
-    if (!data.hits?.length) {
-      el.innerHTML = `<div class="empty">
-        <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <h3>No results found</h3><p>Try different search terms or a different search mode.</p></div>`;
-      return;
-    }
+  el.innerHTML = header + answer + '<div class="hits-list">' + hits + '</div>';
+}
 
-    const modeTag = mode === 'semantic'
-      ? `<span class="tag semantic">Semantic</span>`
-      : mode === 'keyword'
-        ? `<span class="tag keyword">Keyword</span>`
-        : `<span class="tag hybrid">Hybrid</span>`;
-
-    const header = `<div class="results-header">
-      <span class="results-count"><strong>${data.total}</strong> results found</span>
-      <div class="tags">
-        ${modeTag}
-        ${data.keyword_count  ? `<span class="tag keyword">${data.keyword_count} keyword</span>`  : ''}
-        ${data.semantic_count ? `<span class="tag semantic">${data.semantic_count} semantic</span>` : ''}
-      </div>
-    </div>`;
-
-    const answer = data.answer ? `<div class="ai-answer">
-      <div class="ai-label">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-        Claude AI — analysis
-      </div>
-      <div class="ai-text">${esc(data.answer)}</div>
-    </div>` : '';
-
-    const hits = data.hits.map(h => {
-      const url = `${OA_BASE}/${h.id}`;
-      return `<a class="hit" href="${url}" target="_blank" rel="noopener noreferrer">
-        <div class="hit-top">
-          <div class="hit-subject">${esc(h.subject || '(no subject)')}</div>
-          <div class="hit-right">
-            <span class="hit-date">${fmt(h.date)}</span>
-            <span class="source-badge ${h.source}">${h.source === 'semantic' ? 'Semantic' : 'Keyword'}</span>
-          </div>
-        </div>
-        <div class="hit-sender">${esc(h.sender || 'Unknown')}</div>
-        <div class="hit-preview">${esc(h.preview || '')}</div>
-        <div class="hit-score">score ${(h.score*100).toFixed(1)}%</div>
-        <div class="hit-open">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-          Open in OpenArchiver
-        </div>
-      </a>`;
-    }).join('');
-
-    el.innerHTML = header + answer + `<div class="hits-list">${hits}</div>`;
-  }
-
-  checkApi();
-  loadStatus();
+checkApi();
+loadStatus();
 </script>
 </body>
 </html>
