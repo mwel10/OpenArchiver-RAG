@@ -1,0 +1,28 @@
+# Opt-in: put an Authelia login in front of the app.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.authelia.yml up -d
+#
+# Requires an Authelia instance you already run. Fill in its Docker network
+# below, and set $public_host and $app_prefix in nginx/authelia/00-host.conf.
+#
+# This does not open any port. The bindings in docker-compose.yml stay on
+# 127.0.0.1, so you still need something in front that reaches the host:
+# Tailscale Serve, a VPN, or a reverse proxy that terminates TLS. Authelia's
+# session cookie needs a real hostname and HTTPS, so a bare IP and port will
+# not work.
+
+services:
+  email-rag-frontend:
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+      - ./nginx/authelia:/etc/nginx/conf.d:ro
+    # Nginx needs to reach Authelia to make the forward-auth call.
+    networks: [default, auth]
+
+networks:
+  # The Docker network your Authelia container runs on. Find it with:
+  #   docker inspect <authelia-container> \
+  #     --format '{{range $$k,$$v := .NetworkSettings.Networks}}{{$$k}}{{end}}'
+  auth:
+    external: true
+    name: YOUR_AUTHELIA_NETWORK_HERE
