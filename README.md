@@ -13,13 +13,9 @@ Claude reads the actual `.eml` file content and gives a cited, reasoned answer.
 
 ```
 Browser
-    │  https://<your-tailnet-host>/zoek/        (tailnet only, HTTPS)
+    │  http://127.0.0.1:8090        (default: localhost only, no login)
     ▼
-Tailscale Serve
-    │
-    ▼
-Nginx  ──auth_request──►  Authelia  (session cookie, 2FA; no session → portal)
-    │
+Nginx
     ├── /          → static frontend
     └── /api/*     → FastAPI RAG Backend
                         ├── Meilisearch  ← populated by OpenArchiver → keyword search
@@ -28,8 +24,10 @@ Nginx  ──auth_request──►  Authelia  (session cookie, 2FA; no session �
                         └── Anthropic Claude API                     → AI analysis
 ```
 
-Both container ports bind to `127.0.0.1` only. Nothing on the LAN can reach the
-UI or the API; the single way in is Tailscale, and behind it Authelia.
+Both container ports bind to `127.0.0.1`, so nothing else on your network can
+reach the app. That is the whole of its access control in the default setup:
+there is no login. Reach it with an SSH tunnel, or put something in front of it
+that authenticates — see **Security** below for a worked example.
 
 **No re-indexing of existing data.** OpenArchiver's Meilisearch and PostgreSQL are reused as-is. Only the Qdrant vector index is new and needs to be built once (incrementally, skipping already-indexed emails on re-runs).
 
@@ -41,25 +39,60 @@ The archive behind this app is personal email — often tens of thousands of
 messages written by other people who never consented to anything. Treat it
 accordingly.
 
-**Access.** The UI and the API are published on `127.0.0.1` only and are reached
-through Tailscale Serve, so they are visible inside your tailnet and nowhere
-else. Nginx sends every request to Authelia first via `auth_request`; without a
-valid session the visitor is redirected to the Authelia portal. The API sits
-behind the same check as the page, so `/api/search` cannot be called without
-logging in either.
+**The app has no authentication of its own.** It never asks who you are. The
+default `docker-compose.yml` therefore binds both ports to `127.0.0.1`, which
+is what keeps it private. An earlier version of this project published them on
+`0.0.0.0` instead, which put a searchable copy of an entire mail archive, and
+two usable API keys, in front of everyone on the LAN. Do not undo those
+bindings and stop there.
 
-An earlier version of this stack published both ports on `0.0.0.0` with no
-authentication at all. If you are running that version, anyone on your LAN can
-search your entire mail archive and spend your API keys. Fix that first.
+Three ways to use it from another machine, in ascending order of effort:
 
-**Secrets.** `docker-compose.yml` in this repository contains placeholders. Do
-not commit real keys. Prefer an `.env` file with mode `600` next to the compose
-file, or Docker secrets, over inline values — inline values end up in
-`docker inspect`, in backups, and in every copy of the file.
+**1. SSH tunnel.** Nothing to configure, good for occasional use.
 
-**Qdrant** runs without an API key in this setup and is reachable by any
-container on the same Docker network. Set `QDRANT__SERVICE__API_KEY` and pass it
-from the backend if that matters in your environment.
+```bash
+ssh -N -L 8090:127.0.0.1:8090 you@host
+# then open http://127.0.0.1:8090/
+```
+
+**2. A reverse proxy you already trust.** Anything that terminates TLS and
+authenticates before passing the request on. Keep the container ports on
+`127.0.0.1` and point the proxy at them.
+
+**3. Authelia, as shipped.** `docker-compose.authelia.yml` and `nginx/authelia/`
+are a working example: nginx asks Authelia about every request through
+`auth_request` and redirects to the portal when there is no session, so the API
+is behind the same check as the page.
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.authelia.yml up -d
+```
+
+Set `$public_host` and `$app_prefix` in `nginx/authelia/00-host.conf`, and the
+Authelia network name in `docker-compose.authelia.yml`. Tired of the flags? Put
+`COMPOSE_FILE=docker-compose.yml:docker-compose.authelia.yml` in a `.env` next
+to the compose file and plain `docker compose up -d` picks both up.
+
+This still opens no port. You need something in front that reaches the host:
+Tailscale Serve, a VPN, a reverse proxy. Authelia's session cookie needs a real
+hostname and HTTPS, so a bare `IP:port` will not do. The setup this was built
+against uses Tailscale Serve:
+
+```bash
+sudo tailscale serve --bg --set-path /zoek http://127.0.0.1:8090
+```
+
+No Authelia configuration change is needed when the app shares a hostname with
+an app Authelia already protects, because the session cookie is scoped to that
+domain. A different hostname needs its own cookie entry and access control rule.
+
+**Secrets.** `docker-compose.yml` ships placeholders. Do not commit real keys.
+Prefer an `.env` file with mode `600` over inline values — inline values end up
+in `docker inspect`, in backups, and in every copy of the file.
+
+**Qdrant** runs without an API key here and is reachable by any container on
+the same Docker network. Set `QDRANT__SERVICE__API_KEY` and pass it from the
+backend if that matters in your environment.
 
 ---
 
@@ -67,8 +100,8 @@ from the backend if that matters in your environment.
 
 - Docker + Docker Compose
 - A running OpenArchiver instance
-- [Tailscale](https://tailscale.com/) on the host, for HTTPS and tailnet-only access
-- An [Authelia](https://www.authelia.com/) instance, for the login in front of the app
+- Optional, only for the Authelia variant: an [Authelia](https://www.authelia.com/)
+  instance and a way to reach the host, such as [Tailscale](https://tailscale.com/)
 - An [Anthropic API key](https://console.anthropic.com/settings/keys) (Claude)
 - An [OpenAI API key](https://platform.openai.com/api-keys) (for `text-embedding-3-small` embeddings — ~$1–2 one-time cost for 50,000 emails)
 
@@ -122,34 +155,31 @@ Also verify the container hostnames match yours:
 
 Check with: `docker ps --format "{{.Names}}"`
 
-### 3. Point nginx and Authelia at your host
+### 3. Optional: put a login in front
 
-In `nginx/00-host.conf`, replace `YOUR_TAILNET_HOST_HERE` with your tailnet
-hostname (`tailscale status` shows it). In `docker-compose.yml`, replace
-`YOUR_AUTHELIA_NETWORK_HERE` with the Docker network your Authelia container
-runs on.
+Skip this if you only need the app on the machine it runs on. See **Security**
+above for what you are skipping and the alternatives.
 
-Nginx reaches Authelia at `http://authelia:9091/auth/api/authz/auth-request`.
-Adjust the hostname, port and path prefix in `nginx/default.conf` if your
-Authelia is mounted differently. Confirm it answers before going further:
+For the Authelia variant, set `$public_host` and `$app_prefix` in
+`nginx/authelia/00-host.conf`, and the Authelia Docker network in
+`docker-compose.authelia.yml`. Confirm Authelia answers before going further:
 
 ```bash
 docker run --rm --network <your-authelia-network> curlimages/curl -s -o /dev/null -w '%{http_code}\n' \
   -H 'X-Original-Method: GET' \
-  -H 'X-Original-URL: https://<your-tailnet-host>/zoek/' \
+  -H 'X-Original-URL: https://<your-host>/<prefix>/' \
   http://authelia:9091/auth/api/authz/auth-request
 # 401 is correct here: reachable, and you are not logged in.
 ```
-
-No Authelia configuration change is needed when the app shares a hostname with
-an app Authelia already protects, because the session cookie is scoped to that
-domain. A different hostname needs its own cookie entry and access control rule.
 
 ### 4. Start the stack
 
 ```bash
 cd email-rag
 docker compose up -d --build
+
+# or, with the Authelia variant:
+docker compose -f docker-compose.yml -f docker-compose.authelia.yml up -d --build
 ```
 
 Check all three containers are running:
@@ -157,7 +187,15 @@ Check all three containers are running:
 docker ps | grep -E "qdrant|email-rag"
 ```
 
-Then publish it on your tailnet (needs root):
+The app is now on `127.0.0.1:8090` and nowhere else. To reach it from another
+machine, tunnel in:
+
+```bash
+ssh -N -L 8090:127.0.0.1:8090 you@host
+```
+
+Or, if you set up the Authelia variant, publish it through Tailscale Serve
+(needs root):
 
 ```bash
 sudo tailscale serve --bg --set-path /zoek http://127.0.0.1:8090
@@ -167,7 +205,7 @@ tailscale serve status
 ### 5. Build the semantic index
 
 **Option A — Web UI** (easiest):
-Open `https://<your-tailnet-host>/zoek/` and click **"Index new emails"**.
+Open the app (see step 5) and click **"Index new emails"**.
 This indexes 500 at a time. For large archives, use Option B.
 
 **Option B — Bulk script** (recommended for large archives):
@@ -208,7 +246,7 @@ The script is **idempotent** — already-indexed emails are skipped automaticall
 
 ## Usage
 
-Open `https://<your-tailnet-host>/zoek/` and sign in through Authelia.
+Open `http://127.0.0.1:8090/`, or whatever address you put in front of it.
 
 ### Search modes
 
@@ -264,9 +302,13 @@ email-rag/
 │   └── Dockerfile
 ├── frontend/
 │   └── index.html           ← Web UI (single file, no build step)
+├── docker-compose.authelia.yml  ← Optional: adds the Authelia login
 └── nginx/
-    ├── 00-host.conf         ← Your tailnet hostname, in one place
-    └── default.conf         ← Static files, /api proxy, Authelia auth_request
+    ├── plain/
+    │   └── default.conf     ← Default: static files + /api proxy, no login
+    └── authelia/
+        ├── 00-host.conf     ← Public hostname and path prefix
+        └── default.conf     ← Same, plus the Authelia auth_request
 ```
 
 ---

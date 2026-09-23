@@ -55,10 +55,10 @@ services:
       - email-rag-backend
     volumes:
       - ./frontend:/usr/share/nginx/html:ro
-      # The whole directory: 00-host.conf holds your tailnet hostname.
-      - ./nginx:/etc/nginx/conf.d:ro
-    # Nginx needs to reach Authelia for the forward-auth check.
-    networks: [default, auth]
+      # The whole directory, so a variant can ship more than one .conf file.
+      # Swap this for ./nginx/authelia to put a login in front; see
+      # docker-compose.authelia.yml.
+      - ./nginx/plain:/etc/nginx/conf.d:ro
     ports:
       - "127.0.0.1:8090:80"
 
@@ -72,9 +72,3 @@ networks:
   default:
     external: true
     name: openarchiver_default
-  # The network your Authelia container runs on. The search app joins it only
-  # to make the forward-auth call. Find it with:
-  #   docker inspect <authelia-container> --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{end}}'
-  auth:
-    external: true
-    name: YOUR_AUTHELIA_NETWORK_HERE
