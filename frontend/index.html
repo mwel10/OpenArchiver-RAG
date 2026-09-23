@@ -264,6 +264,16 @@ var VERSION = '1.5';
   // van rechtstreeks naar poort 8001 die op het hele LAN open stond. Het pad
   // wordt afgeleid van de huidige locatie, zodat het ook klopt als de app
   // onder een voorvoegsel hangt zoals /zoek/.
+  //
+  // Zonder afsluitende slash klopt die afleiding niet: op /zoek levert ze /api
+  // op in plaats van /zoek/api, en falen alle aanroepen. Tailscale Serve knipt
+  // het voorvoegsel eraf voordat nginx het ziet, dus nginx kan dit niet
+  // rechtzetten en de pagina moet het zelf doen. Een laatste segment zonder
+  // punt is een map, geen bestand, dus daar hoort een slash achter.
+  var LAST = location.pathname.split('/').pop();
+  if (LAST !== '' && LAST.indexOf('.') === -1) {
+    location.replace(location.pathname + '/' + location.search + location.hash);
+  }
   var BASE = location.pathname.slice(-1) === '/'
     ? location.pathname
     : location.pathname.replace(/[^\/]*$/, '');
