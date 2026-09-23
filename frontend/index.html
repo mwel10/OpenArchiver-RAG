@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="nl">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Email Archive Search v1.5</title>
+<title>E-mailarchief Zoeken v1.5</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -172,7 +172,7 @@
       <rect x="2" y="4" width="20" height="16" rx="2"/>
       <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
     </svg>
-    Email Archive Search
+    E-mailarchief
     <span class="logo-version">v1.5</span>
   </div>
   <div class="header-right">
@@ -184,65 +184,65 @@
 <main>
 
   <div class="card">
-    <div class="card-title">Semantic index (Qdrant)</div>
+    <div class="card-title">Semantische index</div>
     <div class="index-row">
       <div class="progress-wrap">
         <div class="progress-bar"><div class="progress-fill" id="pfill" style="width:0%"></div></div>
-        <div class="progress-label" id="plabel">Loading...</div>
+        <div class="progress-label" id="plabel">Laden...</div>
       </div>
       <button class="btn btn-primary" id="btn-index" onclick="startIndex()">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.06-4.57"/></svg>
-        Index new emails
+        Indexeer nieuwe e-mails
       </button>
       <button class="btn btn-ghost" onclick="loadStatus()">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-        Refresh
+        Vernieuwen
       </button>
       <span id="running-msg" class="running-msg" style="display:none">
-        <span class="spinner dark"></span> Indexing...
+        <span class="spinner dark"></span> Bezig...
       </span>
     </div>
   </div>
 
   <div class="card">
-    <div class="card-title">Search</div>
+    <div class="card-title">Zoeken</div>
 
     <div class="mode-tabs">
       <button class="mode-tab active" data-mode="hybrid"   onclick="setMode(this)">Hybrid</button>
-      <button class="mode-tab"        data-mode="semantic" onclick="setMode(this)">Semantic</button>
-      <button class="mode-tab"        data-mode="keyword"  onclick="setMode(this)">Keyword</button>
+      <button class="mode-tab"        data-mode="semantic" onclick="setMode(this)">Semantisch</button>
+      <button class="mode-tab"        data-mode="keyword"  onclick="setMode(this)">Trefwoord</button>
     </div>
 
     <div class="search-row">
       <div class="input-wrap">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         <textarea id="q" rows="4"
-          placeholder="e.g. 'We have a dispute with the contractor about who is responsible for the bathroom renovation. Analyse the correspondence and indicate who is responsible and why.'
+          placeholder="Bijv. 'ik heb een geschil met de aannemer over wie verantwoordelijk is voor de renovatie van de badkamer. Doe een analyse op de correspondentie en geef aan wie waarom verantwoordelijk is.'
 
-Shift+Enter = new line  |  Enter = search"
+Shift+Enter = nieuwe regel  |  Enter = zoeken"
           onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();doSearch();}"></textarea>
       </div>
       <button class="btn btn-primary" id="btn-search" onclick="doSearch()" style="margin-top:1px">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        Search
+        Zoeken
       </button>
     </div>
 
     <div class="filters">
       <div class="filter-group">
-        <label>Sender</label>
-        <input type="text" id="f-sender" placeholder="name@domain.com">
+        <label>Afzender</label>
+        <input type="text" id="f-sender" placeholder="naam@domein.nl">
       </div>
       <div class="filter-group">
-        <label>From date</label>
+        <label>Vanaf datum</label>
         <input type="date" id="f-from">
       </div>
       <div class="filter-group">
-        <label>To date</label>
+        <label>Tot datum</label>
         <input type="date" id="f-to">
       </div>
       <div class="filter-group">
-        <label>Results</label>
+        <label>Resultaten</label>
         <select id="f-limit">
           <option value="10">10</option>
           <option value="15" selected>15</option>
@@ -260,9 +260,25 @@ Shift+Enter = new line  |  Enter = search"
 
 <script>
 var VERSION = '1.5';
-var API = location.protocol + '//' + location.hostname + ':8001';
-// Update port and path to match your OpenArchiver installation
-var OA_BASE = 'http://' + location.hostname + ':3000/dashboard/archived-emails';
+// De API loopt nu via nginx op hetzelfde adres, achter Authelia, in plaats
+  // van rechtstreeks naar poort 8001 die op het hele LAN open stond. Het pad
+  // wordt afgeleid van de huidige locatie, zodat het ook klopt als de app
+  // onder een voorvoegsel hangt zoals /zoek/.
+  //
+  // Zonder afsluitende slash klopt die afleiding niet: op /zoek levert ze /api
+  // op in plaats van /zoek/api, en falen alle aanroepen. Tailscale Serve knipt
+  // het voorvoegsel eraf voordat nginx het ziet, dus nginx kan dit niet
+  // rechtzetten en de pagina moet het zelf doen. Een laatste segment zonder
+  // punt is een map, geen bestand, dus daar hoort een slash achter.
+  var LAST = location.pathname.split('/').pop();
+  if (LAST !== '' && LAST.indexOf('.') === -1) {
+    location.replace(location.pathname + '/' + location.search + location.hash);
+  }
+  var BASE = location.pathname.slice(-1) === '/'
+    ? location.pathname
+    : location.pathname.replace(/[^\/]*$/, '');
+  var API = BASE + 'api';
+var OA_BASE = 'http://' + location.hostname + ':3212/dashboard/archived-emails';
 var mode = 'hybrid';
 var pollTimer = null;
 
@@ -274,7 +290,7 @@ function setMode(btn) {
 
 function fmt(str) {
   if (!str) return '';
-  try { return new Date(str).toLocaleDateString('en-GB', {day:'2-digit', month:'short', year:'numeric'}); }
+  try { return new Date(str).toLocaleDateString('nl-NL', {day:'2-digit', month:'short', year:'numeric'}); }
   catch(e) { return str; }
 }
 
@@ -309,11 +325,11 @@ function loadStatus() {
       var pct = d.coverage_pct || 0;
       document.getElementById('pfill').style.width = pct + '%';
       document.getElementById('plabel').textContent =
-        (d.qdrant_indexed || 0).toLocaleString() + ' of ' +
-        (d.postgres_total || 0).toLocaleString() + ' emails indexed (' + pct + '%)';
+        (d.qdrant_indexed || 0).toLocaleString('nl-NL') + ' van ' +
+        (d.postgres_total || 0).toLocaleString('nl-NL') + ' e-mails geindexeerd (' + pct + '%)';
       document.getElementById('idx-status').innerHTML =
         '<span class="dot ' + (pct >= 99 ? 'ok' : 'warn') + '"></span>' +
-        (d.qdrant_indexed || 0).toLocaleString() + ' vectors';
+        (d.qdrant_indexed || 0).toLocaleString('nl-NL') + ' vectors';
       var running = d.state && d.state.running;
       document.getElementById('running-msg').style.display = running ? 'flex' : 'none';
       document.getElementById('btn-index').disabled = !!running;
@@ -347,7 +363,7 @@ function startIndex() {
     pollTimer = setInterval(loadStatus, 3000);
   })
   .catch(function(e) {
-    showErr('Failed to start: ' + e.message);
+    showErr('Starten mislukt: ' + e.message);
     document.getElementById('btn-index').disabled = false;
     document.getElementById('running-msg').style.display = 'none';
   });
@@ -358,7 +374,7 @@ function doSearch() {
   if (!q) { document.getElementById('q').focus(); return; }
   var btn = document.getElementById('btn-search');
   btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> Searching...';
+  btn.innerHTML = '<span class="spinner"></span> Zoeken...';
   document.getElementById('err').style.display = 'none';
   document.getElementById('results').innerHTML = skelCards(4);
 
@@ -380,12 +396,12 @@ function doSearch() {
   })
   .then(function(data) { render(data); })
   .catch(function(e) {
-    showErr('Search error: ' + e.message);
+    showErr('Zoekfout: ' + e.message);
     document.getElementById('results').innerHTML = '';
   })
   .finally(function() {
     btn.disabled = false;
-    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Search';
+    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Zoeken';
   });
 }
 
@@ -394,21 +410,21 @@ function render(data) {
   if (!data.hits || !data.hits.length) {
     el.innerHTML = '<div class="empty">' +
       '<svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>' +
-      '<h3>No results found</h3><p>Try different search terms or a different search mode.</p></div>';
+      '<h3>Geen resultaten</h3><p>Probeer andere zoektermen of een andere zoekmodus.</p></div>';
     return;
   }
 
   var modeTag = mode === 'semantic'
-    ? '<span class="tag semantic">Semantic</span>'
+    ? '<span class="tag semantic">Semantisch</span>'
     : mode === 'keyword'
-      ? '<span class="tag keyword">Keyword</span>'
+      ? '<span class="tag keyword">Trefwoord</span>'
       : '<span class="tag hybrid">Hybrid</span>';
 
-  var kwTag = data.keyword_count ? '<span class="tag keyword">' + data.keyword_count + ' keyword</span>' : '';
-  var semTag = data.semantic_count ? '<span class="tag semantic">' + data.semantic_count + ' semantic</span>' : '';
+  var kwTag = data.keyword_count ? '<span class="tag keyword">' + data.keyword_count + ' trefwoord</span>' : '';
+  var semTag = data.semantic_count ? '<span class="tag semantic">' + data.semantic_count + ' semantisch</span>' : '';
 
   var header = '<div class="results-header">' +
-    '<span class="results-count"><strong>' + data.total + '</strong> results found</span>' +
+    '<span class="results-count"><strong>' + data.total + '</strong> resultaten</span>' +
     '<div class="tags">' + modeTag + kwTag + semTag + '</div>' +
     '</div>';
 
@@ -417,7 +433,7 @@ function render(data) {
     answer = '<div class="ai-answer">' +
       '<div class="ai-label">' +
         '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>' +
-        'Claude AI — analysis' +
+        'Claude analyse' +
       '</div>' +
       '<div class="ai-text">' + esc(data.answer) + '</div>' +
       '</div>';
@@ -427,21 +443,21 @@ function render(data) {
   for (var i = 0; i < data.hits.length; i++) {
     var h = data.hits[i];
     var url = OA_BASE + '/' + h.id;
-    var badge = h.source === 'semantic' ? 'Semantic' : 'Keyword';
+    var badge = h.source === 'semantic' ? 'Semantisch' : 'Trefwoord';
     hits += '<a class="hit" href="' + url + '" target="_blank" rel="noopener noreferrer">' +
       '<div class="hit-top">' +
-        '<div class="hit-subject">' + esc(h.subject || '(no subject)') + '</div>' +
+        '<div class="hit-subject">' + esc(h.subject || '(geen onderwerp)') + '</div>' +
         '<div class="hit-right">' +
           '<span class="hit-date">' + fmt(h.date) + '</span>' +
           '<span class="source-badge ' + h.source + '">' + badge + '</span>' +
         '</div>' +
       '</div>' +
-      '<div class="hit-sender">' + esc(h.sender || 'Unknown') + '</div>' +
+      '<div class="hit-sender">' + esc(h.sender || 'Onbekend') + '</div>' +
       '<div class="hit-preview">' + esc(h.preview || '') + '</div>' +
       '<div class="hit-score">score ' + (h.score * 100).toFixed(1) + '%</div>' +
       '<div class="hit-open">' +
         '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>' +
-        'Open in OpenArchiver' +
+        'Openen in OpenArchiver' +
       '</div>' +
       '</a>';
   }
