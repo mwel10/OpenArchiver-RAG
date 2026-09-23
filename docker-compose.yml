@@ -5,6 +5,14 @@ services:
     image: qdrant/qdrant:v1.11.4
     container_name: qdrant
     restart: unless-stopped
+    # Docker's default soft limit of 1024 is not enough once a second
+    # collection of ~1M points exists. Qdrant then fails to flush segments
+    # ("Too many open files", os error 24), refuses connections, and leaves
+    # the collection in status "red".
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
     volumes:
       - qdrant_data:/qdrant/storage
 
@@ -32,8 +40,11 @@ services:
     volumes:
       # Mount OpenArchiver's email storage read-only so the backend can read .eml files
       - /path/to/openarchiver/data:/var/data/open-archiver:ro
+    # Localhost only. Tailscale Serve puts HTTPS in front and is reachable
+    # from your tailnet alone. This used to be 0.0.0.0, which let anyone on
+    # the LAN call the API without logging in.
     ports:
-      - "8001:8001"
+      - "127.0.0.1:8001:8001"
 
   # ── Web Frontend — Nginx serves the search UI ─────────────────────────────────
   email-rag-frontend:
@@ -44,9 +55,12 @@ services:
       - email-rag-backend
     volumes:
       - ./frontend:/usr/share/nginx/html:ro
-      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      # The whole directory: 00-host.conf holds your tailnet hostname.
+      - ./nginx:/etc/nginx/conf.d:ro
+    # Nginx needs to reach Authelia for the forward-auth check.
+    networks: [default, auth]
     ports:
-      - "8090:80"
+      - "127.0.0.1:8090:80"
 
 volumes:
   qdrant_data:
@@ -58,3 +72,9 @@ networks:
   default:
     external: true
     name: openarchiver_default
+  # The network your Authelia container runs on. The search app joins it only
+  # to make the forward-auth call. Find it with:
+  #   docker inspect <authelia-container> --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{end}}'
+  auth:
+    external: true
+    name: YOUR_AUTHELIA_NETWORK_HERE
