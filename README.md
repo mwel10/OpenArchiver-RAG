@@ -134,26 +134,31 @@ docker inspect OpenArchiver-WEB | grep -A3 '"Mounts"'
 # "Source" is the host path — e.g. /volume1/docker/openarchiver/data
 ```
 
-### 2. Edit `docker-compose.yml`
+### 2. Create your `.env`
 
-Fill in the placeholders:
+```bash
+cp .env.example .env
+chmod 600 .env
+```
 
-| Placeholder | Replace with |
-|-------------|-------------|
-| `YOUR_MEILI_MASTER_KEY_HERE` | Value from `MEILI_MASTER_KEY` |
-| `YOUR_PG_USER` | Value from `POSTGRES_USER` |
-| `YOUR_PG_PASSWORD` | Value from `POSTGRES_PASSWORD` |
-| `YOUR_PG_DB` | Value from `POSTGRES_DB` |
-| `YOUR_ANTHROPIC_API_KEY_HERE` | Your Anthropic API key |
-| `YOUR_OPENAI_API_KEY_HERE` | Your OpenAI API key |
-| `/path/to/openarchiver/data` | Host path to OpenArchiver email storage |
-| `openarchiver_default` | Your actual Docker network name |
+Fill in the values you found in step 1:
 
-Also verify the container hostnames match yours:
-- `OpenArchiver-DB` — PostgreSQL container name
-- `OpenArchiver-MEILI` — Meilisearch container name
+| Variable | Value |
+|---|---|
+| `MEILISEARCH_MASTER_KEY` | From `MEILI_MASTER_KEY` |
+| `DATABASE_URL` | `postgresql://USER:PASSWORD@OpenArchiver-DB:5432/DATABASE` |
+| `ANTHROPIC_API_KEY` | Your Anthropic API key |
+| `OPENAI_API_KEY` | Your OpenAI API key |
+| `OPENARCHIVER_DATA` | Host path to OpenArchiver's `.eml` storage |
 
-Check with: `docker ps --format "{{.Names}}"`
+`.env` is in `.gitignore`. Keep it there, and keep it at mode `600`: these
+values reach `docker inspect` either way, but there is no reason to put them in
+a file that gets committed, copied and backed up as well.
+
+Then check the container hostnames in `docker-compose.yml` match yours:
+`OpenArchiver-DB` and `OpenArchiver-MEILI`, and the network name
+`openarchiver_default`. Check with `docker ps --format "{{.Names}}"` and
+`docker network ls`.
 
 ### 3. Optional: put a login in front
 
