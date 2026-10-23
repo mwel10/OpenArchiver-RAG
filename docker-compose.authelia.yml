@@ -16,6 +16,7 @@ services:
     volumes:
       - ./frontend:/usr/share/nginx/html:ro
       - ./nginx/authelia:/etc/nginx/conf.d:ro
+      - ./nginx/backend-secret.conf:/etc/nginx/backend-secret.conf:ro
     # Nginx needs to reach Authelia to make the forward-auth call.
     networks: [default, auth]
 
