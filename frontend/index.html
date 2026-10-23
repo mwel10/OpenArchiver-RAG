@@ -126,6 +126,11 @@
   a.hit:hover { border-color: var(--accent); box-shadow: 0 2px 12px rgba(26,86,219,.1); }
   .hit-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: .4rem; }
   .hit-subject { font-size: .93rem; font-weight: 600; line-height: 1.3; }
+  /* Het nummer waarmee de analyse naar deze e-mail verwijst. Zonder dit
+     moet je de kaarten tellen om te zien welke [6] is. */
+  .hit-nr { font-family: var(--mono); font-size: .78rem; color: var(--accent); margin-right: .4rem; }
+  .hit-nr.ongelezen { color: var(--border-mid); font-weight: 400; }
+  .hits-note { font-size: .78rem; color: var(--ink-muted); margin: -.6rem 0 1rem; }
   .hit-right { display: flex; align-items: center; gap: .6rem; flex-shrink: 0; }
   .hit-date { font-size: .77rem; color: var(--ink-muted); white-space: nowrap; }
   .source-badge { font-size: .68rem; font-weight: 600; padding: 2px 7px; border-radius: 99px; }
@@ -452,14 +457,28 @@ function render(data) {
       '</div>';
   }
 
+  // Claude krijgt alleen de eerste treffers te lezen, niet de hele lijst. De
+  // verwijzingen [1], [2] ... in de analyse horen bij die eerste treffers.
+  // De backend geeft het aantal door; oudere versies doen dat niet, vandaar 10.
+  var gelezen = data.cited_count || 10;
+  var notitie = '';
+  if (data.answer && data.hits.length > gelezen) {
+    notitie = '<div class="hits-note">De analyse verwijst met [1] tot [' + gelezen +
+      '] naar de eerste ' + gelezen + ' treffers hieronder. De overige staan erbij ' +
+      'als zoekresultaat, maar zijn niet aan Claude voorgelegd.</div>';
+  }
+
   var hits = '';
   for (var i = 0; i < data.hits.length; i++) {
     var h = data.hits[i];
     var url = OA_BASE + '/' + h.id;
     var badge = h.source === 'semantic' ? 'Semantisch' : 'Trefwoord';
+    var nr = i < gelezen
+      ? '<span class="hit-nr">[' + (i + 1) + ']</span>'
+      : '<span class="hit-nr ongelezen">' + (i + 1) + '</span>';
     hits += '<a class="hit" href="' + url + '" target="_blank" rel="noopener noreferrer">' +
       '<div class="hit-top">' +
-        '<div class="hit-subject">' + esc(h.subject || '(geen onderwerp)') + '</div>' +
+        '<div class="hit-subject">' + nr + esc(h.subject || '(geen onderwerp)') + '</div>' +
         '<div class="hit-right">' +
           '<span class="hit-date">' + fmt(h.date) + '</span>' +
           '<span class="source-badge ' + h.source + '">' + badge + '</span>' +
@@ -475,7 +494,7 @@ function render(data) {
       '</a>';
   }
 
-  el.innerHTML = header + answer + '<div class="hits-list">' + hits + '</div>';
+  el.innerHTML = header + answer + notitie + '<div class="hits-list">' + hits + '</div>';
 }
 
 checkApi();
