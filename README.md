@@ -428,6 +428,23 @@ chmod -R 755 ./frontend/
 docker restart email-rag-frontend
 ```
 
+**`ERR_SSL_PROTOCOL_ERROR` when opening a result in OpenArchiver:**
+The "Open in OpenArchiver" link defaults to `http://<same-host>:3212`. If you
+reach this search page over HTTPS, a browser with "always use secure
+connections" upgrades that link to `https://<same-host>:3212`, where nothing
+speaks TLS. Put TLS in front of OpenArchiver and point the app at it. With
+Tailscale, for example:
+```bash
+sudo tailscale serve --bg --https=8448 http://127.0.0.1:3212
+```
+Then set `OPENARCHIVER_BASE` near the top of the script block in
+`frontend/index.html` — it overrides the default:
+```js
+var OPENARCHIVER_BASE = 'https://' + location.hostname + ':8448';
+```
+The new port is a separate origin, so you sign in to OpenArchiver once more
+there. Leaving `OPENARCHIVER_BASE` empty keeps the original behaviour.
+
 **CORS errors in browser:**
 These are caused by the backend returning 500. Check `docker logs email-rag-backend` first — fix the backend error and CORS will resolve automatically.
 
