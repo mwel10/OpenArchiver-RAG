@@ -25,21 +25,23 @@ services:
     restart: unless-stopped
     depends_on:
       - qdrant
+    # Waarden komen uit .env ernaast; zie .env.example. Inline waarden komen
+    # terecht in `docker inspect`, in back-ups en in elke kopie van dit bestand.
     environment:
       # OpenArchiver internal services — container names as shown in Docker
       MEILISEARCH_URL:        http://OpenArchiver-MEILI:7700
-      MEILISEARCH_MASTER_KEY: YOUR_MEILI_MASTER_KEY_HERE
-      DATABASE_URL:           postgresql://YOUR_PG_USER:YOUR_PG_PASSWORD@OpenArchiver-DB:5432/YOUR_PG_DB
+      MEILISEARCH_MASTER_KEY: ${MEILISEARCH_MASTER_KEY}
+      DATABASE_URL:           ${DATABASE_URL}
       # Qdrant
       QDRANT_URL:             http://qdrant:6333
       # Storage — path where OpenArchiver stores .eml files (mounted read-only)
       STORAGE_ROOT:           /var/data/open-archiver
       # AI keys
-      ANTHROPIC_API_KEY:      YOUR_ANTHROPIC_API_KEY_HERE
-      OPENAI_API_KEY:         YOUR_OPENAI_API_KEY_HERE
+      ANTHROPIC_API_KEY:      ${ANTHROPIC_API_KEY}
+      OPENAI_API_KEY:         ${OPENAI_API_KEY}
     volumes:
       # Mount OpenArchiver's email storage read-only so the backend can read .eml files
-      - /path/to/openarchiver/data:/var/data/open-archiver:ro
+      - ${OPENARCHIVER_DATA:?set OPENARCHIVER_DATA in .env}:/var/data/open-archiver:ro
     # Localhost only. Tailscale Serve puts HTTPS in front and is reachable
     # from your tailnet alone. This used to be 0.0.0.0, which let anyone on
     # the LAN call the API without logging in.
