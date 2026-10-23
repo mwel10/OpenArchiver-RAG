@@ -278,7 +278,20 @@ var VERSION = '1.5';
     ? location.pathname
     : location.pathname.replace(/[^\/]*$/, '');
   var API = BASE + 'api';
-var OA_BASE = 'http://' + location.hostname + ':3212/dashboard/archived-emails';
+// Waar is OpenArchiver zelf bereikbaar? Leeg laten betekent: dezelfde host op
+// poort 3212 over HTTP. Dat klopt voor de standaardopstelling en werkt zolang
+// je deze zoekpagina ook over HTTP benadert.
+//
+// Benader je deze pagina over HTTPS, dan tilt een browser met "gebruik altijd
+// beveiligde verbindingen" de http-link naar OpenArchiver op naar https op
+// diezelfde poort. Daar luistert geen TLS, en de browser toont alleen
+// ERR_SSL_PROTOCOL_ERROR. Dat is niet met een instelling in nginx te
+// verhelpen, want het gaat om een adres buiten deze app. Zet hieronder dan de
+// https-URL waarop OpenArchiver bereikbaar is, zonder pad en zonder
+// afsluitende slash, bijvoorbeeld:
+//   var OPENARCHIVER_BASE = 'https://' + location.hostname + ':8448';
+var OPENARCHIVER_BASE = '';
+var OA_BASE = (OPENARCHIVER_BASE || 'http://' + location.hostname + ':3212') + '/dashboard/archived-emails';
 var mode = 'hybrid';
 var pollTimer = null;
 
