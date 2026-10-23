@@ -39,12 +39,70 @@ The archive behind this app is personal email — often tens of thousands of
 messages written by other people who never consented to anything. Treat it
 accordingly.
 
-**The app has no authentication of its own.** It never asks who you are. The
-default `docker-compose.yml` therefore binds both ports to `127.0.0.1`, which
+**The app has no authentication of its own by default.** The
+default `docker-compose.yml` binds both ports to `127.0.0.1`, which
 is what keeps it private. An earlier version of this project published them on
 `0.0.0.0` instead, which put a searchable copy of an entire mail archive, and
 two usable API keys, in front of everyone on the LAN. Do not undo those
 bindings and stop there.
+
+### Binding to localhost is not the whole story
+
+The backend also sits on your OpenArchiver stack's Docker network, where every
+other container reaches it at `http://email-rag-backend:8001` directly. A
+reverse proxy in front of port 8090 does not cover that path, and neither does
+the `127.0.0.1` binding. If one container in that stack is ever compromised,
+the entire archive is one unauthenticated HTTP call away.
+
+Three settings close this, and all three ship switched off so nothing changes
+until you fill them in.
+
+| What | Where | Why |
+|---|---|---|
+| `BACKEND_SHARED_SECRET` in `.env` plus the matching line in `nginx/backend-secret.conf` | both | nginx identifies itself to the backend; anything else on the Docker network gets a 401. `/health` stays open, because a health check that needs a secret measures the secret. |
+| `QDRANT_API_KEY` in `.env` | qdrant + backend | Without it, any container on that network can overwrite vectors and payloads, and so decide which emails end up in the model's context. That is context poisoning without touching a prompt. |
+| `MEILISEARCH_API_KEY` in `.env` | backend | This app only searches. A search-only key cannot delete indexes or mint new keys, which the master key can. |
+
+A fourth one lives in your database rather than in this repo: the connection
+string in `DATABASE_URL` does not need the account OpenArchiver itself uses.
+This app reads one table and writes nothing, so give it its own role:
+
+```sql
+CREATE ROLE emailrag_ro LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE
+  PASSWORD 'generate-something-random';
+GRANT CONNECT ON DATABASE openarchiver TO emailrag_ro;
+GRANT USAGE ON SCHEMA public TO emailrag_ro;
+GRANT SELECT ON TABLE archived_emails TO emailrag_ro;
+```
+
+Then point `DATABASE_URL` at `emailrag_ro`. On the installation this was
+developed against, the account in use was a superuser, which means a single SQL
+defect would have reached every table including the ingestion credentials for
+the live mailboxes.
+
+### Search performance
+
+The keyword source runs `ILIKE '%term%'` against `subject` and `sender_email`.
+Without an index that is a full table scan: 1.37 s measured on 1.16M rows.
+Three trigram indexes remove it. They took 40 seconds to build and added
+376 MB.
+
+```sql
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE INDEX CONCURRENTLY archived_emails_subject_trgm
+  ON archived_emails USING gin (subject gin_trgm_ops);
+CREATE INDEX CONCURRENTLY archived_emails_sender_trgm
+  ON archived_emails USING gin (sender_email gin_trgm_ops);
+CREATE INDEX CONCURRENTLY archived_emails_recipients_trgm
+  ON archived_emails USING gin ((recipients::text) gin_trgm_ops);
+CREATE INDEX CONCURRENTLY archived_emails_thread_idx
+  ON archived_emails (thread_id);
+ANALYZE archived_emails;
+```
+
+Measured afterwards: the term query went from 1365 ms to 54 ms, and a
+counterparty filter across both directions from 656 ms to 1.2 ms. Run these as
+a user that may create indexes, not as the read-only role above.
 
 Three ways to use it from another machine, in ascending order of effort:
 

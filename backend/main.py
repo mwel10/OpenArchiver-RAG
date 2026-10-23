@@ -4,6 +4,7 @@ import json
 import email
 import time
 import uuid
+import secrets
 import asyncio
 from datetime import datetime, timezone
 from typing import Optional, List, Literal
@@ -13,8 +14,7 @@ import asyncpg
 import meilisearch
 from anthropic import Anthropic
 import openai
-from fastapi import FastAPI, BackgroundTasks
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, BackgroundTasks, Depends, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 from qdrant_client import QdrantClient
@@ -22,12 +22,30 @@ from qdrant_client.models import Distance, VectorParams, PointStruct
 
 # ── Config ────────────────────────────────────────────────────────────────────
 MEILI_URL      = os.getenv("MEILISEARCH_URL", "http://OpenArchiver-MEILI:7700")
-MEILI_KEY      = os.getenv("MEILISEARCH_MASTER_KEY", "")
+# Deze applicatie zoekt alleen; ze maakt geen indexen aan en schrijft geen
+# documenten. Een search-only key uit /keys volstaat dus, en dat is beter
+# dan de master key, waarmee je indexen kunt verwijderen en nieuwe sleutels
+# kunt maken. MEILISEARCH_MASTER_KEY blijft werken voor bestaande
+# opstellingen.
+MEILI_KEY      = (os.getenv("MEILISEARCH_API_KEY")
+                  or os.getenv("MEILISEARCH_MASTER_KEY", ""))
 POSTGRES_URL   = os.getenv("DATABASE_URL", "")
 QDRANT_URL     = os.getenv("QDRANT_URL", "http://qdrant:6333")
+# Qdrant draait standaard zonder authenticatie. Elke container op hetzelfde
+# Docker-netwerk kan dan vectoren en payloads overschrijven, en daarmee
+# bepalen welke e-mails in de context van het antwoordmodel belanden. Dat
+# is contextvergiftiging zonder dat er ooit een prompt wordt aangeraakt.
+# Leeg laten betekent geen sleutel, zoals voorheen.
+QDRANT_API_KEY = os.getenv("QDRANT_API_KEY", "")
 ANTHROPIC_KEY  = os.getenv("ANTHROPIC_API_KEY", "")
 OPENAI_KEY     = os.getenv("OPENAI_API_KEY", "")
 STORAGE_ROOT   = os.getenv("STORAGE_ROOT", "/var/data/open-archiver")
+# Gedeeld geheim dat nginx meestuurt. De backend luistert op 127.0.0.1 van de
+# host, maar hangt ook aan het Docker-netwerk van OpenArchiver, en daar is hij
+# voor elke andere container gewoon bereikbaar op http://email-rag-backend:8001.
+# Authelia en de auth_request in nginx zitten daar niet voor. Leeg laten
+# betekent open, zoals voorheen, met een waarschuwing bij het opstarten.
+BACKEND_SECRET = os.getenv("BACKEND_SHARED_SECRET", "")
 EMBED_MODEL    = "text-embedding-3-small"
 CLAUDE_MODEL   = "claude-sonnet-4-6"
 VECTOR_DIM     = 1536
@@ -61,7 +79,8 @@ CLAIM_TIMEOUT_SECONDS = 120
 NEWEST_COOLDOWN_SECONDS = 300
 
 meili         = meilisearch.Client(MEILI_URL, MEILI_KEY)
-qdrant        = QdrantClient(url=QDRANT_URL, timeout=120)
+qdrant        = QdrantClient(url=QDRANT_URL, timeout=120,
+                             api_key=QDRANT_API_KEY or None)
 claude_client = Anthropic(api_key=ANTHROPIC_KEY)
 # embed() is een blokkerende aanroep binnen async code. Zonder time-out kan een
 # hangende OpenAI-verbinding ook /health, /search en /index/state bevriezen.
@@ -92,15 +111,34 @@ async def lifespan(app):
             )
         print("[startup] Qdrant collection %s bestaat al (size=%s, %s)"
               % (COLLECTION, cfg.size, cfg.distance))
+    if not BACKEND_SECRET:
+        print("[startup] LET OP: BACKEND_SHARED_SECRET is niet gezet. De API is "
+              "bereikbaar voor elke container op dit Docker-netwerk, buiten "
+              "nginx en Authelia om. Zie nginx/backend-secret.conf.")
     yield
 
-app = FastAPI(title="Email RAG API", lifespan=lifespan)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+def vereis_geheim(request: Request, x_backend_secret: str = Header(default="")):
+    """Elke route loopt hierlangs. Zonder ingesteld geheim verandert er niets,
+    zodat een bestaande opstelling blijft werken; mét geheim is de backend niet
+    langer aanspreekbaar vanaf het gedeelde Docker-netwerk.
+
+    /health blijft open. Die geeft alleen een status en een tijdstempel terug,
+    en een gezondheidscontrole die een geheim nodig heeft is geen
+    gezondheidscontrole meer: dan meet je of het geheim klopt."""
+    if request.url.path == "/health" or not BACKEND_SECRET:
+        return
+    if not secrets.compare_digest(x_backend_secret, BACKEND_SECRET):
+        raise HTTPException(status_code=401, detail="Niet geautoriseerd")
+
+
+app = FastAPI(title="Email RAG API", lifespan=lifespan,
+              dependencies=[Depends(vereis_geheim)])
+# Geen CORS-middleware. De frontend wordt door dezelfde nginx geserveerd als
+# waar /api doorheen loopt, dus het is altijd dezelfde oorsprong geweest en
+# CORS was nergens voor nodig. Met allow_origins=["*"] op een API zonder eigen
+# authenticatie kon elke willekeurige pagina die je in je browser opende een
+# zoekopdracht op je archief doen en het antwoord uitlezen. De binding op
+# 127.0.0.1 beschermt tegen het netwerk, niet tegen je eigen browser.
 
 class SearchRequest(BaseModel):
     # Zonder grens gaat een vraag van willekeurige lengte integraal naar
@@ -353,8 +391,13 @@ async def run_indexing(limit: int, after_id: Optional[str], mode: str):
             await asyncio.sleep(0.05)
 
     except Exception as e:
-        _state["error"] = str(e)
-        print(f"[indexing] FOUT: {e}")
+        # Geen str(e) in de toestand. Een verbindingsfout van asyncpg zet de
+        # volledige DSN in de boodschap, inclusief wachtwoord, en die toestand
+        # gaat ongefilterd terug via twee GET-endpoints. Het detail blijft in
+        # de containerlog, met een verwijzing zodat je het kunt terugvinden.
+        _state["error"] = "mislukt (%s), zie de log van de backend" % type(e).__name__
+        _state["error_run"] = _state.get("run_id")
+        print(f"[indexing] FOUT in run {_state.get('run_id')}: {e}")
     finally:
         if conn is not None:
             await conn.close()
@@ -365,7 +408,7 @@ async def start_indexing(req: IndexRequest, background_tasks: BackgroundTasks):
     if _state["running"]:
         claimed_at = _state.get("claimed_at") or 0.0
         if _state.get("task_started") or time.time() - claimed_at < CLAIM_TIMEOUT_SECONDS:
-            return {"message": "Loopt al", "state": _state}
+            return {"message": "Loopt al", "state": _toestand()}
         # De vorige claim is nooit aan een achtergrondtaak toegekomen, bijvoorbeeld
         # omdat de client wegviel voordat het antwoord verstuurd was. Zonder deze
         # uitweg bleef "running" hangen tot een herstart van de container.
@@ -377,7 +420,7 @@ async def start_indexing(req: IndexRequest, background_tasks: BackgroundTasks):
         if since < NEWEST_COOLDOWN_SECONDS:
             return JSONResponse(status_code=429, content={
                 "message": f"Te snel na de vorige run; probeer het over {int(NEWEST_COOLDOWN_SECONDS - since)}s opnieuw",
-                "state": _state,
+                "state": _toestand(),
             })
         _state["newest_started_at"] = time.time()
     # running en run_id worden hier gezet, vóór de achtergrondtaak start. Zo kan
@@ -386,12 +429,22 @@ async def start_indexing(req: IndexRequest, background_tasks: BackgroundTasks):
     _state.update({"running": True, "task_started": False, "claimed_at": time.time()})
     _state["run_id"] += 1
     background_tasks.add_task(run_indexing, req.limit, req.after_id, mode)
-    return {"message": "Gestart", "state": _state}
+    return {"message": "Gestart", "state": _toestand()}
+
+# Wat er van de toestand naar buiten mag. Een debug-veld dat later wordt
+# toegevoegd komt zo niet vanzelf in een antwoord terecht.
+_STATE_PUBLIEK = ("running", "total", "indexed", "skipped", "failed", "done",
+                  "error", "error_run", "run_id", "next_after_id")
+
+
+def _toestand() -> dict:
+    return {k: _state.get(k) for k in _STATE_PUBLIEK if k in _state}
+
 
 @app.get("/index/state")
 async def index_state():
     """Alleen de toestand in het geheugen: geen database of qdrant, dus goedkoop om te pollen."""
-    return _state
+    return _toestand()
 
 @app.get("/index/status")
 async def index_status():
@@ -410,7 +463,7 @@ async def index_status():
     # dan een dekking van 100% die nergens op slaat.
     known = total > 0
     return {
-        "state":                      _state,
+        "state":                      _toestand(),
         "qdrant_indexed":             qdrant_count,
         "postgres_total":             total if known else None,
         "postgres_total_is_estimate": True,

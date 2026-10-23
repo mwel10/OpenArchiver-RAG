@@ -5,6 +5,11 @@ services:
     image: qdrant/qdrant:v1.11.4
     container_name: qdrant
     restart: unless-stopped
+    environment:
+      # Without this, every container on the shared Docker network can
+      # read and overwrite the vectors and their payloads. Empty means no
+      # key, which is the previous behaviour.
+      QDRANT__SERVICE__API_KEY: ${QDRANT_API_KEY:-}
     # Docker's default soft limit of 1024 is not enough once a second
     # collection of ~1M points exists. Qdrant then fails to flush segments
     # ("Too many open files", os error 24), refuses connections, and leaves
@@ -30,10 +35,17 @@ services:
     environment:
       # OpenArchiver internal services — container names as shown in Docker
       MEILISEARCH_URL:        http://OpenArchiver-MEILI:7700
+      # A search-only key is enough; see .env.example. The master key still
+      # works, so existing setups keep running.
+      MEILISEARCH_API_KEY:    ${MEILISEARCH_API_KEY:-}
       MEILISEARCH_MASTER_KEY: ${MEILISEARCH_MASTER_KEY}
+      # Shared with nginx; see nginx/backend-secret.conf. Empty means
+      # no check, which is the previous behaviour.
+      BACKEND_SHARED_SECRET:  ${BACKEND_SHARED_SECRET:-}
       DATABASE_URL:           ${DATABASE_URL}
       # Qdrant
       QDRANT_URL:             http://qdrant:6333
+      QDRANT_API_KEY:         ${QDRANT_API_KEY:-}
       # Storage — path where OpenArchiver stores .eml files (mounted read-only)
       STORAGE_ROOT:           /var/data/open-archiver
       # AI keys
@@ -61,6 +73,10 @@ services:
       # Swap this for ./nginx/authelia to put a login in front; see
       # docker-compose.authelia.yml.
       - ./nginx/plain:/etc/nginx/conf.d:ro
+      # One line that identifies nginx to the backend. Mounted outside
+      # conf.d on purpose: anything in conf.d is included at the http
+      # level, and proxy_set_header belongs inside the location.
+      - ./nginx/backend-secret.conf:/etc/nginx/backend-secret.conf:ro
     ports:
       - "127.0.0.1:8090:80"
 
