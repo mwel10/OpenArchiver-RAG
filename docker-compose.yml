@@ -62,7 +62,10 @@ services:
 
   # ── Web Frontend — Nginx serves the search UI ─────────────────────────────────
   email-rag-frontend:
-    image: nginx:1.27-alpine
+    # Stable branch. 1.27 was no longer a maintained branch: of the 26
+    # advisories covering it, only two ever got a 1.27 fix, and everything
+    # from 2026 is fixed in 1.28 or later only.
+    image: nginx:1.30-alpine
     container_name: email-rag-frontend
     restart: unless-stopped
     depends_on:

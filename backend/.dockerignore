@@ -1,0 +1,10 @@
+# Zonder dit kopieert `COPY . .` alles mee wat in de bouwcontext staat,
+# inclusief een lokale .env met sleutels erin.
+.env
+.env.*
+!.env.example
+.git
+.gitignore
+__pycache__/
+*.pyc
+*.bak-*
