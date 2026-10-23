@@ -5,16 +5,16 @@ FROM python:3.12.15-slim
 
 WORKDIR /app
 
-# Geen gcc en geen libpq-dev meer. Alles in requirements.lock levert een
+# Geen gcc en geen libpq-dev meer. Alles in requirements.txt levert een
 # manylinux-wheel voor cp312 op amd64, en asyncpg praat zelf het
 # Postgres-protocol, dus libpq wordt niet gebruikt. Bouwgereedschap in een
 # productie-image is aanvalsoppervlak zonder functie.
-COPY requirements.lock .
+COPY requirements.txt .
 
 # --require-hashes: pip weigert te installeren als een pakket niet exact
 # overeenkomt met de vastgelegde hash. Daarmee is "pin versions and verify
 # integrity" niet langer een belofte van de registry maar een controle hier.
-RUN pip install --no-cache-dir --require-hashes -r requirements.lock
+RUN pip install --no-cache-dir --require-hashes -r requirements.txt
 
 COPY . .
 
