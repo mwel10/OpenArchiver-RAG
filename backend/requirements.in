@@ -15,7 +15,7 @@ pydantic==2.14.1
 # Binnen één minor van de server, zoals Qdrant voorschrijft. De server
 # staat op 1.16.3. Vanaf client 1.16 bestaat search() niet meer; de code
 # gebruikt query_points(), dat al sinds 1.10 werkt.
-qdrant-client==1.16.2
+qdrant-client==1.19.1
 
 # Deze twee blijven voorlopig staan: de sprong naar anthropic 2.x en openai 3.x
 # is twee majors en brengt httpx2 mee, en hoort een eigen ronde met een eigen
@@ -29,4 +29,4 @@ openai==1.54.0
 # "TypeError: Client.__init__() got an unexpected keyword argument 'proxies'".
 # Dat is hier gemeten, niet aangenomen. Deze grens kan weg zodra openai naar
 # 3.x gaat; dat brengt sowieso httpx2 mee in plaats van httpx.
-httpx<0.28
+httpx<0.29
