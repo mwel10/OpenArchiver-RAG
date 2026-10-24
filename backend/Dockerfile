@@ -1,7 +1,7 @@
 # Vastgezet op een patchversie in plaats van op de tak. python:3.12-slim
 # verschuift onder je handen; de container draaide 3.12.13 terwijl 3.12.15 de
 # laatste patch van die tak was, en 3.12 krijgt alleen nog veiligheidsfixes.
-FROM python:3.12.15-slim
+FROM python:3.14.7-slim
 
 WORKDIR /app
 
