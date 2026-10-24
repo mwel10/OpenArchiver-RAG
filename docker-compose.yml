@@ -45,10 +45,13 @@ services:
     environment:
       # OpenArchiver internal services — container names as shown in Docker
       MEILISEARCH_URL:        http://OpenArchiver-MEILI:7700
-      # A search-only key is enough; see .env.example. The master key still
-      # works, so existing setups keep running.
+      # A search-only key is all this app needs: it searches and never writes.
+      # The master key can delete indexes and mint new keys, so handing it to a
+      # search client is more authority than the job requires. It is no longer
+      # required here, so a deployment can leave it out entirely; it still works
+      # as a fallback for setups that have not created a search key yet.
       MEILISEARCH_API_KEY:    ${MEILISEARCH_API_KEY:-}
-      MEILISEARCH_MASTER_KEY: ${MEILISEARCH_MASTER_KEY}
+      MEILISEARCH_MASTER_KEY: ${MEILISEARCH_MASTER_KEY:-}
       # Shared with nginx; see nginx/backend-secret.conf. Empty means
       # no check, which is the previous behaviour.
       BACKEND_SHARED_SECRET:  ${BACKEND_SHARED_SECRET:-}
