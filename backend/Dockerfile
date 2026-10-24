@@ -1,7 +1,19 @@
 # Vastgezet op een patchversie in plaats van op de tak. python:3.12-slim
 # verschuift onder je handen; de container draaide 3.12.13 terwijl 3.12.15 de
 # laatste patch van die tak was, en 3.12 krijgt alleen nog veiligheidsfixes.
-FROM python:3.14.7-slim
+# Blijft op 3.12 tot anthropic mee kan. De SDK op 0.40.0 zet een eigen
+# attribuut op een typing.Union-object, en vanaf Python 3.14 hebben die geen
+# __dict__ meer:
+#
+#   AttributeError: 'typing.Union' object has no attribute '__discriminator__'
+#   and no __dict__ for setting new attributes
+#
+# Dat raakt elke aanroep naar Claude. In deze applicatie valt de query-planner
+# daardoor terug op de letterlijke vraag, wat geen foutmelding oplevert maar
+# wel aantoonbaar slechtere zoekresultaten: een vraag die met de planner de
+# juiste correspondentie bovenaan zet, gaf zonder planner volstrekt
+# ongerelateerde treffers. Gemeten op 3.14.7, niet afgeleid uit een changelog.
+FROM python:3.12.15-slim
 
 WORKDIR /app
 
