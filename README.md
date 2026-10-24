@@ -80,6 +80,32 @@ developed against, the account in use was a superuser, which means a single SQL
 defect would have reached every table including the ingestion credentials for
 the live mailboxes.
 
+### Upgrading Qdrant
+
+Qdrant does not support skipping minor versions, not even on a single node, and
+**downgrades are not supported**: the storage migration on upgrade is
+irreversible. A backup is the only way back, so take one before you start.
+
+```bash
+# Cold copy of the volume, as root because the directory is
+docker stop qdrant
+docker run --rm -u 0:0 -v <volume-path>:/src:ro -v /somewhere/backups:/dst \
+  alpine:3 tar cf /dst/qdrant-$(date +%F).tar -C /src .
+docker start qdrant
+```
+
+Then step through the last patch of every minor in turn, checking after each
+one that the collection is `green` and the point count is unchanged before
+moving on. Going from 1.11.4 to 1.16.3 is five steps: 1.12.6, 1.13.6, 1.14.1,
+1.15.5, 1.16.3. Measured on a 1.16M-point collection of 7.3 GB, each step took
+between 35 and 75 seconds and the whole sequence five minutes; the backup took
+44 seconds. Qdrant memory-maps its storage, so it held about 150 MB of RAM
+throughout and the upgrade is not memory-hungry.
+
+Keep `qdrant-client` within one minor of the server. `search()` no longer
+exists from client 1.16 on; this app uses `query_points()`, which has worked
+since 1.10, so the code does not depend on which of the two is installed.
+
 ### Updating dependencies
 
 `backend/requirements.in` holds the direct dependencies; `backend/requirements.txt`

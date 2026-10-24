@@ -849,9 +849,15 @@ async def _bron_qdrant(plan: dict, per_bron: int) -> List[List[dict]]:
     for vec in vectoren:
         # Net als embed() is dit een blokkerende HTTP-aanroep. Blijft hij in de
         # event loop staan, dan bevriest hij ook /health en /index/state.
-        res = await asyncio.to_thread(
-            qdrant.search, collection_name=COLLECTION, query_vector=vec,
-            limit=per_bron, score_threshold=0.20, with_payload=True)
+        #
+        # query_points() in plaats van search(): die laatste bestaat niet meer
+        # vanaf qdrant-client 1.16, en de client hoort volgens Qdrant binnen één
+        # minor van de server te blijven. query_points() werkt al sinds client
+        # 1.10, dus deze regel is niet afhankelijk van welke versie er draait.
+        # Het antwoord is een QueryResponse; de treffers zitten in .points.
+        res = (await asyncio.to_thread(
+            qdrant.query_points, collection_name=COLLECTION, query=vec,
+            limit=per_bron, score_threshold=0.20, with_payload=True)).points
         lijst = []
         for r in res:
             pl = r.payload or {}
