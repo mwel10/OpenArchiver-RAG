@@ -2,7 +2,7 @@ services:
 
   # ── Qdrant — vector database for semantic search ──────────────────────────────
   qdrant:
-    image: qdrant/qdrant:v1.11.4
+    image: qdrant/qdrant:v1.19.2
     container_name: qdrant
     restart: unless-stopped
     environment:
