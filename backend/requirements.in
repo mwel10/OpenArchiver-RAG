@@ -20,7 +20,7 @@ qdrant-client==1.16.2
 # Deze twee blijven voorlopig staan: de sprong naar anthropic 2.x en openai 3.x
 # is twee majors en brengt httpx2 mee, en hoort een eigen ronde met een eigen
 # verificatie te krijgen.
-anthropic==0.40.0
+anthropic==1.17.0
 openai==1.54.0
 
 # httpx blijft onder 0.28 zolang openai op 1.x staat. httpx heeft in 0.28 het
