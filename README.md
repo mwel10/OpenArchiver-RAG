@@ -80,6 +80,33 @@ developed against, the account in use was a superuser, which means a single SQL
 defect would have reached every table including the ingestion credentials for
 the live mailboxes.
 
+### Updating dependencies
+
+`backend/requirements.in` holds the direct dependencies; `backend/requirements.txt`
+is generated from it with hashes and holds all 45 packages, transitive ones
+included. Edit the `.in` file, never the `.txt`:
+
+```bash
+docker run --rm --platform linux/amd64 -v "$PWD/backend":/w -w /w python:3.12-slim \
+  sh -c 'pip install -q pip-tools && pip-compile --generate-hashes --allow-unsafe \
+         --strip-extras --output-file requirements.txt requirements.in'
+```
+
+The Dockerfile installs with `--require-hashes`, so a package that does not
+match its recorded hash stops the build instead of reaching the image.
+
+This matters more than it looks. Before the lockfile existed, nine direct
+packages were pinned and nothing else, and GitHub's dependency graph saw
+exactly those nine. `starlette` arrives through `fastapi`, and the pinned
+version carried fourteen advisories of which three were HIGH. Dependabot
+reported zero alerts, correctly, for a tree it could not see. Measured with
+`pip-audit`: fourteen findings in the old set, none in the new one.
+
+```bash
+docker run --rm --platform linux/amd64 -v "$PWD/backend":/w -w /w python:3.12-slim \
+  sh -c 'pip install -q pip-audit && pip-audit -r requirements.txt'
+```
+
 ### Search performance
 
 The keyword source runs `ILIKE '%term%'` against `subject` and `sender_email`.
