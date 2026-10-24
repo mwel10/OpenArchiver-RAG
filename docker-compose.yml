@@ -2,7 +2,17 @@ services:
 
   # ── Qdrant — vector database for semantic search ──────────────────────────────
   qdrant:
-    image: qdrant/qdrant:v1.11.4
+    # v1.11.4 had CVE-2026-25628 (HIGH): the /logger endpoint takes a
+    # caller-supplied path, read access is enough, and log lines can land
+    # in config/local.yaml, which overrides the config on restart. An API
+    # key is not a mitigation for it. Fixed from 1.16 onwards: the
+    # advisory names 1.15.6, which was never released.
+    #
+    # Upgrading from an older version: Qdrant does not support skipping
+    # minor versions, not even on a single node, and downgrades are not
+    # supported either. Step through the last patch of every minor, back
+    # up first, and check the point count after each step. See README.
+    image: qdrant/qdrant:v1.16.3
     container_name: qdrant
     restart: unless-stopped
     environment:

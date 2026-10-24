@@ -12,7 +12,10 @@ uvicorn[standard]==0.54.0
 asyncpg==0.32.0
 meilisearch==0.43.0
 pydantic==2.14.1
-qdrant-client==1.12.1
+# Binnen één minor van de server, zoals Qdrant voorschrijft. De server
+# staat op 1.16.3. Vanaf client 1.16 bestaat search() niet meer; de code
+# gebruikt query_points(), dat al sinds 1.10 werkt.
+qdrant-client==1.16.2
 
 # Deze twee blijven voorlopig staan: de sprong naar anthropic 2.x en openai 3.x
 # is twee majors en brengt httpx2 mee, en hoort een eigen ronde met een eigen
