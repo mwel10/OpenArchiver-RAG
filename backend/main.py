@@ -516,10 +516,11 @@ _DATUM_OK    = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 # Welke vorm van prompt caching deze SDK aankan, wordt bij de eerste aanroep
-# vastgesteld in plaats van aangenomen: het draaiende image heeft anthropic
-# 0.40, en daar bestaat cache_control nog niet als parameter op
-# messages.create(). Na een SDK-upgrade schakelt dit vanzelf om naar de
-# eenvoudiger vorm, zonder dat iemand hier iets hoeft te wijzigen.
+# vastgesteld in plaats van aangenomen. Op anthropic 0.40 bestond
+# cache_control nog niet als parameter op messages.create() en viel dit terug
+# op plaatsing per blok; vanaf 1.17 wordt de parameter geaccepteerd en blijft
+# de terugval ongebruikt. De detectie blijft staan omdat ze gratis is en een
+# oudere SDK bij een overnemer er niet op stukloopt.
 _CACHE_VORM = "parameter"
 
 
@@ -527,11 +528,17 @@ def create_message(**kwargs):
     """Elke Claude-aanroep loopt hierlangs, zodat prompt caching standaard aan
     staat en niet per aanroepplek herhaald hoeft te worden.
 
-    Let op bij het lezen van de rekening: caching slaat pas aan boven een
-    minimale lengte van het stabiele deel van de prompt, en die drempel ligt
-    ruim boven de systeemprompts hier. Dit levert dus voorlopig geen treffers
-    op. Het staat er omdat het bij een langere systeemprompt vanzelf gaat
-    werken zonder dat iemand eraan hoeft te denken.
+    Caching slaat pas aan boven een minimale lengte van het stabiele deel van
+    de prompt. Hier stond dat die drempel niet gehaald werd en dit dus niets
+    opleverde; dat is gemeten en het klopte niet. De systeemprompt van de
+    planner is 1210 tekens, wat op 521 tokens uitkomt, en dat is net genoeg:
+
+        eerste aanroep : cache_creation=521  cache_read=0
+        tweede aanroep : cache_creation=0    cache_read=521
+
+    Het stabiele deel moet daarvoor wel stabiel blijven. Zet er geen tijdstempel
+    of iets anders dat per verzoek verschilt vóór, anders valt de cache stil om
+    en zie je dat alleen terug op de rekening.
     """
     global _CACHE_VORM
     if _CACHE_VORM == "parameter":
