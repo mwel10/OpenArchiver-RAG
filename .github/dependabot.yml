@@ -5,6 +5,11 @@
 #
 # Grouped on purpose. Nine separate pull requests a week is how a repository
 # learns to ignore them.
+#
+# The ignore rules below all use `update-types` and never `versions`. That
+# distinction matters: `update-types` suppresses routine version updates only,
+# while `versions` would also hold back a security fix. A CVE still opens a
+# pull request for every dependency listed here.
 version: 2
 updates:
   - package-ecosystem: pip
@@ -18,16 +23,46 @@ updates:
       klein-onderhoud:
         patterns: ["*"]
         update-types: ["minor", "patch"]
+    ignore:
+      # De client moet binnen één minor van de Qdrant-server blijven, en de
+      # server verzetten is een reeks migraties met een back-up per stap.
+      - dependency-name: qdrant-client
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      # De bovengrens op httpx is een vangrail, geen verouderde pin: openai
+      # start niet op met httpx 0.28. Dependabot heeft hem al drie keer
+      # verbreed, zie de gesloten PR's #10 en #20.
+      - dependency-name: httpx
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
     labels: ["dependencies"]
 
   - package-ecosystem: docker
     directory: /backend
     schedule:
       interval: monthly
+    ignore:
+      # Een Python-major is hier een keer duur geweest. 3.14 brak de
+      # Anthropic-SDK, de query-planner viel stil terug op de letterlijke
+      # vraag, en de zoekresultaten werden slechter zonder dat er iets
+      # faalde. Zo'n sprong hoort gemeten te worden, niet gebumpt. Patches
+      # binnen de tak lopen gewoon door.
+      - dependency-name: python
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
     labels: ["dependencies"]
 
   - package-ecosystem: docker-compose
     directory: /
     schedule:
       interval: monthly
+    ignore:
+      # Qdrant staat geen overgeslagen minor-versies toe, ook niet op één
+      # node, en downgraden kan niet omdat de opslagmigratie onomkeerbaar is.
+      # Een minor is hier een geplande operatie met een back-up per stap; zie
+      # README onder "Upgrading Qdrant".
+      - dependency-name: qdrant/qdrant
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      # nginx wisselt stable en mainline af per even en oneven minor. Een
+      # automatische minor zet de opstelling op een tak die bij de volgende
+      # oneven versie wordt losgelaten, en daar kwamen we net vandaan.
+      - dependency-name: nginx
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
     labels: ["dependencies"]
